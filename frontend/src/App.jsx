@@ -8,6 +8,7 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import AuthPage from "./pages/AuthPage";
 import OrderHistory from "./pages/OrderHistory";
+import Account from "./pages/Account";
 import AdminDashboard from "./pages/AdminDashboard";
 import VerifyEmail from "./pages/VerifyEmail";
 import About from "./pages/About";
@@ -34,6 +35,7 @@ function App() {
             <Route path="/register" element={<AuthPage register />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/orders" element={<OrderHistory />} />
+            <Route path="/account" element={<Account />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
