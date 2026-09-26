@@ -64,6 +64,7 @@ const Navbar = () => {
           {user ? (
             <>
               <li><Link className="transition hover:text-brand-700" to="/orders">My orders</Link></li>
+              <li><Link className="transition hover:text-brand-700" to="/account">Account</Link></li>
               {user.role === "admin" && <li><Link className="transition hover:text-brand-700" to="/admin">Admin</Link></li>}
               <li>
                 <button className="gradient-icon-action" type="button" aria-label="Sign out" title="Sign out" onClick={logout}>
@@ -108,6 +109,7 @@ const Navbar = () => {
           {user ? (
             <>
               <Link className="block py-2 text-gray-700 hover:text-brand-700" to="/orders" onClick={() => setMenuOpen(false)}>My orders</Link>
+              <Link className="block py-2 text-gray-700 hover:text-brand-700" to="/account" onClick={() => setMenuOpen(false)}>Account</Link>
               {user.role === "admin" && <Link className="block py-2 text-gray-700 hover:text-brand-700" to="/admin" onClick={() => setMenuOpen(false)}>Admin</Link>}
               <button className="gradient-icon-action mt-2" type="button" aria-label="Sign out" title="Sign out" onClick={() => { logout(); setMenuOpen(false); }}>
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

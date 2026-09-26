@@ -196,6 +196,53 @@ const loginUser = async (req, res) => {
     }
 };
 
+const changePassword = async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    if (typeof currentPassword !== 'string' || !currentPassword || Buffer.byteLength(currentPassword, 'utf8') > 72) {
+        return res.status(400).json({ message: 'Enter your current password' });
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 8 || Buffer.byteLength(newPassword, 'utf8') > 72) {
+        return res.status(400).json({ message: 'The new password must be between 8 and 72 bytes' });
+    }
+    if (newPassword === currentPassword) {
+        return res.status(400).json({ message: 'Choose a new password that is different from the current one' });
+    }
+
+    try {
+        // `protect` loads the user without the password hash.
+        const user = await User.findById(req.user._id);
+        // 400, not 401: the frontend treats 401 as "session expired" and signs the user out.
+        if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+            return res.status(400).json({ message: 'Your current password is incorrect' });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 12);
+        user.passwordChangedAt = new Date();
+        await user.save();
+
+        const text = `The password for your ANM-Shop account (${user.email}) was changed on ${user.passwordChangedAt.toLocaleString('en-IN')}. You have been signed out on other devices. If you did not make this change, contact ANM-Shop support right away.`;
+        const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#33252e"><h1 style="color:#754656">Your password was changed</h1><p>${text}</p></div>`;
+        // A failed notice shouldn't undo the change; it is only logged.
+        sendEmail(user.email, 'Your ANM-Shop password was changed', text, html)
+            .then((sent) => sent || console.error('Password change notice was not sent'))
+            .catch((error) => console.error('Password change notice failed:', error.message));
+
+        return res.json({
+            message: 'Password changed. You have been signed out on other devices.',
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                token: generateToken(user._id),
+            },
+        });
+    } catch (error) {
+        console.error('Change password error:', error.message);
+        return res.status(500).json({ message: 'Unable to change password' });
+    }
+};
+
 const getUsers = async (req, res) => {
     try {
         const users = await User.find({}).select(
@@ -207,4 +254,4 @@ const getUsers = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, verifyEmail, resendVerificationOtp, loginUser, getUsers };
+module.exports = { registerUser, verifyEmail, resendVerificationOtp, loginUser, changePassword, getUsers };

@@ -14,6 +14,12 @@ const protect = async(req, res, next) => {
         if (!req.user) {
             return res.status(401).json({ message: 'Account no longer exists' });
         }
+        // JWT `iat` is in whole seconds, so compare at second precision: the token issued
+        // together with a password change stays valid, anything older does not.
+        const changedAt = req.user.passwordChangedAt?.getTime();
+        if (changedAt && decoded.iat < Math.floor(changedAt / 1000)) {
+            return res.status(401).json({ message: 'Your password was changed. Please sign in again.' });
+        }
         return next();
     } catch (error) {
         return res.status(401).json({ message: 'Invalid or expired authentication token' });
