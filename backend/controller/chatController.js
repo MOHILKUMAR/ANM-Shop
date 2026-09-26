@@ -54,7 +54,7 @@ const sendChatMessage = async (req, res) => {
         conversation = await ChatConversation.findOneAndUpdate(
             { _id: existing._id, $or: [{ busyUntil: null }, { busyUntil: { $lt: now } }] },
             { $set: { busyUntil: new Date(now.getTime() + BUSY_MS) } },
-            { new: true },
+            { returnDocument: 'after' },
         );
     } catch (error) {
         console.error('Chat claim error:', error.message);
@@ -103,6 +103,11 @@ const sendChatMessage = async (req, res) => {
             // Gemini reports an invalid or restricted API key as 400/403.
             console.error('Support assistant request rejected:', error.status, error.message);
             return res.status(503).json({ message: 'The support assistant is not available right now. You can open a ticket on the Support page.' });
+        }
+        if (error instanceof ApiError && error.status >= 500) {
+            // Every model was still overloaded after the retries in supportAssistant.
+            console.error('Support assistant unavailable after retries:', error.status, error.message);
+            return res.status(503).json({ message: "Google's free AI service is very busy right now. Please try again in a minute, or open a ticket on the Support page." });
         }
         if (error instanceof ApiError) {
             console.error('Support assistant API error:', error.status, error.message);

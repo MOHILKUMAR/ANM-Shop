@@ -141,7 +141,7 @@ const refundIntent = async (intentId, paymentId, reason) => {
     const claimed = await PaymentIntent.findOneAndUpdate(
         { _id: intentId, status: 'pending' },
         { $set: { status: 'refund_pending', paymentId, failureReason: reason } },
-        { new: true },
+        { returnDocument: 'after' },
     );
     if (!claimed) return PaymentIntent.findById(intentId);
 
@@ -183,7 +183,7 @@ const fulfillPayment = async (intentId, paymentId) => {
                 const updatedProduct = await Product.findOneAndUpdate(
                     { _id: item.productId, stock: { $gte: item.qty } },
                     { $inc: { stock: -item.qty } },
-                    { new: true, session },
+                    { returnDocument: 'after', session },
                 );
                 if (!updatedProduct) throw new Error('INSUFFICIENT_STOCK');
             }
