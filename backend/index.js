@@ -71,6 +71,7 @@ app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/payment', require('./routes/paymentRoutes'));
 app.use('/api/analytics', require('./routes/analyticRoutes'));
+app.use('/api/admin/search', require('./routes/searchRoutes'));
 
 app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
