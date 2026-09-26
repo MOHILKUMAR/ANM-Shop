@@ -256,18 +256,42 @@ const verifyPayment = async (req, res) => {
             return res.status(400).json({ message: 'Payment verification failed' });
         }
 
-        const payment = await getRazorpay().payments.fetch(paymentId);
+        if (intent.paymentId && intent.paymentId !== paymentId) {
+            return res.status(409).json({ message: 'This checkout has already been completed' });
+        }
+
+        const razorpay = getRazorpay();
+        let payment = await razorpay.payments.fetch(paymentId);
         if (
             payment.order_id !== razorpayOrderId ||
             Number(payment.amount) !== intent.amountPaise ||
-            payment.currency !== 'INR' ||
-            payment.status !== 'captured'
+            payment.currency !== 'INR'
         ) {
-            return res.status(400).json({ message: 'Payment has not been captured for this checkout' });
+            return res.status(400).json({ message: 'Payment does not match this checkout' });
         }
 
-        if (intent.paymentId && intent.paymentId !== paymentId) {
-            return res.status(409).json({ message: 'This checkout has already been completed' });
+        // Checkout can hand us a payment that is only authorized: auto-capture hasn't run yet,
+        // or it is turned off for the account. The signature and amount are verified, so
+        // capture it here instead of failing and inviting the customer to pay a second time.
+        if (payment.status === 'authorized') {
+            try {
+                payment = await razorpay.payments.capture(paymentId, intent.amountPaise, 'INR');
+            } catch (captureError) {
+                // Usually auto-capture won the race; re-read the real status.
+                console.error('Payment capture failed:', captureError?.error?.description || captureError.message);
+                payment = await razorpay.payments.fetch(paymentId);
+            }
+        }
+
+        if (payment.status === 'authorized') {
+            // The payment.captured webhook creates the order once Razorpay finishes capturing.
+            return res.status(202).json({
+                pending: true,
+                message: `Your payment (${paymentId}) was received and is still being confirmed. Your order will appear in Order History within a few minutes — please don't pay again.`,
+            });
+        }
+        if (payment.status !== 'captured') {
+            return res.status(400).json({ message: 'Payment has not been captured for this checkout' });
         }
 
         const result = await fulfillPayment(intent._id, paymentId);

@@ -40,17 +40,33 @@ const registerUser = async (req, res) => {
     }
 
     try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(409).json({
-                message: existingUser.verified
-                    ? 'An account with this email already exists'
-                    : 'An account exists but is not verified. Verify your email or request a new code.',
-                verificationRequired: !existingUser.verified,
-            });
+        const existingUser = await User.findOne({ email }).select('+verificationOtpSentAt');
+        if (existingUser?.verified) {
+            return res.status(409).json({ message: 'An account with this email already exists' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
+        if (existingUser) {
+            // An unverified account proves nobody controls the inbox yet, so the latest sign-up
+            // replaces its password. Otherwise whoever registered first could keep a password
+            // on an account the real owner later verifies and uses.
+            existingUser.name = name;
+            existingUser.password = hashedPassword;
+            const sentAt = existingUser.verificationOtpSentAt?.getTime() || 0;
+            const emailSent = Date.now() - sentAt < OTP_RESEND_WAIT_MS
+                ? true
+                : await issueVerificationOtp(existingUser);
+            await existingUser.save();
+            return res.status(201).json({
+                message: emailSent
+                    ? 'Enter the verification code sent to your email.'
+                    : 'The verification email could not be sent. Check email configuration and request a new code.',
+                email,
+                emailSent,
+            });
+        }
+
+
         const user = await User.create({ name, email, password: hashedPassword });
         const emailSent = await issueVerificationOtp(user);
 
@@ -73,8 +89,10 @@ const registerUser = async (req, res) => {
 const verifyEmail = async (req, res) => {
     const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
-    if (!email || !/^\d{6}$/.test(otp)) {
-        return res.status(400).json({ message: 'Enter the email address and 6-digit code' });
+    const password = req.body.password;
+    if (!email || !/^\d{6}$/.test(otp) || typeof password !== 'string' || !password ||
+        Buffer.byteLength(password, 'utf8') > 72) {
+        return res.status(400).json({ message: 'Enter the email address, 6-digit code, and your password' });
     }
 
     try {
@@ -93,10 +111,15 @@ const verifyEmail = async (req, res) => {
 
         const expectedHash = Buffer.from(user.verificationOtpHash, 'hex');
         const receivedHash = Buffer.from(hashOtp(otp), 'hex');
-        if (expectedHash.length !== receivedHash.length || !crypto.timingSafeEqual(expectedHash, receivedHash)) {
+        const otpMatches = expectedHash.length === receivedHash.length && crypto.timingSafeEqual(expectedHash, receivedHash);
+        // The password check ties verification to whoever set the account's current password.
+        const passwordMatches = await bcrypt.compare(password, user.password);
+        if (!otpMatches || !passwordMatches) {
             user.verificationOtpAttempts = (user.verificationOtpAttempts || 0) + 1;
             await user.save();
-            return res.status(400).json({ message: 'The verification code is incorrect' });
+            return res.status(400).json({
+                message: 'The verification code or password is incorrect. If you signed up more than once, use the password from your latest sign-up.',
+            });
         }
 
         user.verified = true;
