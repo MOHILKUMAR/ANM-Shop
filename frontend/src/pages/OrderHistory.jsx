@@ -1,0 +1,229 @@
+import { useContext, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { apiRequest } from "../api.js";
+import AuthContext from "../context/AuthContext.js";
+
+const formatMoney = (amount) => `INR ${Number(amount || 0).toFixed(2)}`;
+
+async function downloadBill(order) {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 18;
+  const right = pageWidth - margin;
+  let y = 58;
+
+  pdf.setFillColor(87, 52, 67);
+  pdf.rect(0, 0, pageWidth, 43, "F");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(21);
+  pdf.text("ANM-Shop", margin, 19);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.text("BEAUTY FOR EVERYDAY RITUALS", margin, 27);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(15);
+  pdf.text("PAYMENT RECEIPT / E-BILL", right, 20, { align: "right" });
+
+  pdf.setTextColor(53, 39, 48);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.text("Order details", margin, y);
+  y += 7;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  const details = [
+    [`Order number: ${String(order._id)}`, `Date: ${new Date(order.createdAt).toLocaleDateString()}`],
+    [`Payment ID: ${order.paymentId || "Not available"}`, `Status: ${String(order.status || "pending").toUpperCase()}`],
+  ];
+  for (const [left, rightText] of details) {
+    pdf.text(left, margin, y);
+    pdf.text(rightText, right, y, { align: "right" });
+    y += 6;
+  }
+
+  y += 4;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.text("Delivery address", margin, y);
+  y += 6;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  const address = order.address || {};
+  const addressLines = pdf.splitTextToSize(
+    [address.fullName, address.street, address.city, address.postalCode, address.country, address.phone && `Phone: ${address.phone}`].filter(Boolean).join(", ") || "Not provided",
+    pageWidth - margin * 2,
+  );
+  pdf.text(addressLines, margin, y);
+  y += addressLines.length * 5 + 9;
+
+  const columns = { item: margin, qty: 128, unit: 151, total: right };
+  const drawTableHeader = () => {
+    pdf.setFillColor(244, 231, 232);
+    pdf.roundedRect(margin, y - 5, pageWidth - margin * 2, 10, 2, 2, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8);
+    pdf.setTextColor(87, 52, 67);
+    pdf.text("PRODUCT", columns.item + 2, y + 1);
+    pdf.text("QTY", columns.qty, y + 1, { align: "right" });
+    pdf.text("PRICE", columns.unit, y + 1, { align: "right" });
+    pdf.text("AMOUNT", columns.total, y + 1, { align: "right" });
+    y += 9;
+  };
+
+  drawTableHeader();
+  for (const item of order.items || []) {
+    const nameLines = pdf.splitTextToSize(item.productId?.name || "ANM-Shop beauty product", 96);
+    const rowHeight = Math.max(9, nameLines.length * 4.5 + 3);
+    if (y + rowHeight > pageHeight - 34) {
+      pdf.addPage();
+      y = 22;
+      drawTableHeader();
+    }
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(53, 39, 48);
+    pdf.text(nameLines, columns.item + 2, y);
+    pdf.text(String(item.qty), columns.qty, y, { align: "right" });
+    pdf.text(formatMoney(item.price), columns.unit, y, { align: "right" });
+    pdf.text(formatMoney(Number(item.price) * Number(item.qty)), columns.total, y, { align: "right" });
+    y += rowHeight;
+    pdf.setDrawColor(233, 224, 220);
+    pdf.line(margin, y - 2, right, y - 2);
+  }
+
+  if (y + 24 > pageHeight - 15) {
+    pdf.addPage();
+    y = 24;
+  }
+  y += 8;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(13);
+  pdf.setTextColor(87, 52, 67);
+  pdf.text("TOTAL PAID", columns.unit, y, { align: "right" });
+  pdf.text(formatMoney(order.totalAmount), columns.total, y, { align: "right" });
+  y += 14;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.setTextColor(113, 100, 108);
+  pdf.text("Thank you for shopping with ANM-Shop.", margin, y);
+
+  pdf.save(`ANM-Shop-Bill-${String(order._id).slice(-8).toUpperCase()}.pdf`);
+}
+
+function OrderHistory() {
+  const { user } = useContext(AuthContext);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(Boolean(user?.token));
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [sendingInvoiceId, setSendingInvoiceId] = useState("");
+
+  useEffect(() => {
+    if (!user?.token) return undefined;
+
+    let active = true;
+    apiRequest("/orders/myorders", { token: user.token })
+      .then((data) => {
+        if (active) setOrders(Array.isArray(data) ? data : []);
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.token]);
+
+  async function resendInvoice(orderId) {
+    setSendingInvoiceId(orderId);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiRequest(`/orders/${orderId}/resend-invoice`, {
+        method: "POST",
+        token: user.token,
+      });
+      setOrders((currentOrders) => currentOrders.map((order) =>
+        order._id === orderId ? { ...order, invoiceEmailSent: true } : order,
+      ));
+      setNotice(result.message);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSendingInvoiceId("");
+    }
+  }
+
+  if (!user) {
+    return (
+      <main className="mx-auto min-h-[60vh] max-w-3xl px-4 py-16 text-center">
+        <h1 className="text-3xl font-bold text-gray-900">Sign in to view orders</h1>
+        <Link className="mt-6 inline-block font-semibold text-brand-700" to="/login">Sign in</Link>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto min-h-[60vh] max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+      <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-700">Your account</p>
+      <h1 className="mb-8 text-3xl font-bold text-gray-900">Order history</h1>
+      {notice && <p className="mb-5 rounded-lg bg-green-50 p-4 text-green-800" role="status">{notice}</p>}
+      {loading && <p className="py-12 text-center text-gray-600">Loading orders…</p>}
+      {!loading && error && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
+      {!loading && !error && orders.length === 0 && (
+        <div className="rounded-2xl bg-gray-50 p-10 text-center">
+          <p className="text-gray-700">You haven’t placed any orders yet.</p>
+          <Link className="mt-5 inline-block font-semibold text-brand-700" to="/shop">Browse the shop</Link>
+        </div>
+      )}
+      {!loading && !error && orders.length > 0 && (
+        <div className="space-y-5">
+          {orders.map((order) => (
+            <article className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6" key={order._id}>
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-4">
+                <div>
+                  <h2 className="font-semibold text-gray-900">Order #{order._id.slice(-8).toUpperCase()}</h2>
+                  <p className="mt-1 text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</p>
+                </div>
+                <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium capitalize text-brand-800">{order.status}</span>
+              </div>
+              <ul className="divide-y divide-gray-100">
+                {order.items.map((item, index) => (
+                  <li className="flex items-center justify-between gap-4 py-3 text-sm" key={`${item.productId?._id || item.productId}-${index}`}>
+                    <span className="text-gray-700">{item.productId?.name || "Product"} × {item.qty}</span>
+                    <span className="font-medium text-gray-900">{(Number(item.price) * item.qty).toLocaleString("en-IN", { style: "currency", currency: "INR" })}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex justify-between border-t border-gray-100 pt-4 font-semibold text-gray-900">
+                <span>Total paid</span>
+                <span>{Number(order.totalAmount).toLocaleString("en-IN", { style: "currency", currency: "INR" })}</span>
+              </div>
+              <p className="mt-3 text-sm text-gray-500">Delivering to {order.address?.city}, {order.address?.country}{order.address?.phone ? ` | ${order.address.phone}` : ""}</p>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <p className="text-sm text-gray-500">{order.invoiceEmailSent ? "E-bill sent to your account email" : "E-bill email not confirmed"}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800" type="button" onClick={() => downloadBill(order)}>
+                    Download bill (PDF)
+                  </button>
+                  <button className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 disabled:opacity-60" type="button" disabled={sendingInvoiceId === order._id} onClick={() => resendInvoice(order._id)}>
+                    {sendingInvoiceId === order._id ? "Sending..." : "Resend e-bill"}
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
+
+export default OrderHistory;

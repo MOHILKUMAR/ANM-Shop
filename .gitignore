@@ -1,0 +1,16 @@
+# Dependencies and generated files
+node_modules/
+frontend/dist/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Local environment variables (keep example templates)
+backend/.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example

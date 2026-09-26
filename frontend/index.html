@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/anm-shop-favicon.svg" />
+    <meta name="theme-color" content="#35232E" />
+    <meta name="description" content="Shop quality products at great prices with ANM-Shop." />
+    <script>
+      try {
+        if (localStorage.getItem("anmShopTheme") === "dark") {
+          document.documentElement.dataset.theme = "dark";
+        }
+      } catch {}
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="./src/index.css" rel="stylesheet">
+    <title>ANM-Shop</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/index.jsx"></script>
+  </body>
+</html>
