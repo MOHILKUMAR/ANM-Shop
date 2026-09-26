@@ -39,6 +39,10 @@ const isLocalDevOrigin = (origin) =>
     !isProduction && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
 app.disable('x-powered-by');
+// Hosts like Render/Railway sit behind one reverse proxy. Without this, every request
+// appears to come from the proxy IP and all users share a single rate-limit bucket.
+// Set TRUST_PROXY to the number of proxy hops in front of the API (0 = none).
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 app.use(helmet());
 app.use(cors({
     origin(origin, callback) {
@@ -48,6 +52,13 @@ app.use(cors({
         return callback(new Error('Origin is not allowed by CORS'));
     },
 }));
+// Razorpay webhook signatures are computed over the exact raw body, so this route
+// must be registered before express.json() parses it.
+app.post(
+    '/api/payment/webhook',
+    express.raw({ type: 'application/json', limit: '1mb' }),
+    require('./controller/paymentController').razorpayWebhook,
+);
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '20kb', parameterLimit: 50 }));
 

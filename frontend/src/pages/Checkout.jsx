@@ -46,8 +46,18 @@ function Checkout() {
   if (cart.length === 0) {
     return (
       <main className="mx-auto min-h-[60vh] max-w-3xl px-4 py-16 text-center">
-        <h1 className="text-3xl font-bold text-gray-900">Your cart is empty</h1>
-        <Link className="mt-6 inline-block font-semibold text-brand-700" to="/shop">Browse products</Link>
+        {error ? (
+          <>
+            <h1 className="text-3xl font-bold text-gray-900">About your payment</h1>
+            <p className="mt-4 rounded-lg bg-amber-50 p-4 text-left text-amber-900" role="alert">{error}</p>
+            <Link className="mt-6 inline-block font-semibold text-brand-700" to="/orders">Go to Order History</Link>
+          </>
+        ) : (
+          <>
+            <h1 className="text-3xl font-bold text-gray-900">Your cart is empty</h1>
+            <Link className="mt-6 inline-block font-semibold text-brand-700" to="/shop">Browse products</Link>
+          </>
+        )}
       </main>
     );
   }
@@ -96,7 +106,22 @@ function Checkout() {
             clearCart();
             navigate("/orders", { replace: true });
           } catch (verificationError) {
-            setError(verificationError.message);
+            const { status, data } = verificationError;
+            if (status === 409 && data && "refunded" in data) {
+              // Item sold out mid-payment: the server has refunded (or queued a manual refund).
+              clearCart();
+              setError(verificationError.message);
+            } else if (status === 0 || status >= 500) {
+              // Money was taken but we couldn't confirm. The Razorpay webhook will still
+              // create the order, so don't invite the customer to pay a second time.
+              clearCart();
+              setError(
+                `Your payment (${paymentResponse.razorpay_payment_id}) was received but we couldn't confirm it yet. ` +
+                "Your order will appear in Order History within a few minutes — please don't pay again.",
+              );
+            } else {
+              setError(verificationError.message);
+            }
             setBusy(false);
           }
         },
