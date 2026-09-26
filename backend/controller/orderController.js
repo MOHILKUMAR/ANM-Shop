@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Order = require('../model/Order');
 const sendOrderInvoice = require('../utils/sendOrderInvoice');
 const myOrders = async (req, res) => {
@@ -67,4 +68,20 @@ const updateOrderstatus = async (req, res) => {
     }
 };
 
-module.exports = { myOrders, getOrders, resendOrderInvoice, updateOrderstatus };
+// Removes the order record only: the customer is not refunded and stock is not restored.
+// The checkout payment record stays, so the payment can still be traced.
+const deleteOrder = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid order ID' });
+    }
+    try {
+        const order = await Order.findByIdAndDelete(req.params.id);
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+        return res.json({ message: 'Order deleted' });
+    } catch (error) {
+        console.error('Delete order error:', error.message);
+        return res.status(500).json({ message: 'Unable to delete order' });
+    }
+};
+
+module.exports = { myOrders, getOrders, resendOrderInvoice, updateOrderstatus, deleteOrder };

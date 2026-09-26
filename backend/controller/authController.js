@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../model/User');
@@ -7,6 +8,13 @@ const sendEmail = require('../utils/sendEmail');
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_RESEND_WAIT_MS = 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
+const RESET_TTL_MS = 30 * 60 * 1000;
+const hashResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+// Reset links point at the storefront; FRONTEND_URL may list several origins.
+const storefrontUrl = () => (process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim().replace(/\/+$/, '');
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const isValidNewPassword = (password) =>
+    typeof password === 'string' && password.length >= 8 && Buffer.byteLength(password, 'utf8') <= 72;
 const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 const hashOtp = (otp) => crypto
     .createHmac('sha256', process.env.JWT_SECRET)
@@ -201,7 +209,7 @@ const changePassword = async (req, res) => {
     if (typeof currentPassword !== 'string' || !currentPassword || Buffer.byteLength(currentPassword, 'utf8') > 72) {
         return res.status(400).json({ message: 'Enter your current password' });
     }
-    if (typeof newPassword !== 'string' || newPassword.length < 8 || Buffer.byteLength(newPassword, 'utf8') > 72) {
+    if (!isValidNewPassword(newPassword)) {
         return res.status(400).json({ message: 'The new password must be between 8 and 72 bytes' });
     }
     if (newPassword === currentPassword) {
@@ -218,10 +226,12 @@ const changePassword = async (req, res) => {
 
         user.password = await bcrypt.hash(newPassword, 12);
         user.passwordChangedAt = new Date();
+        user.passwordResetTokenHash = undefined; // an outstanding reset link is no longer needed
+        user.passwordResetExpiresAt = undefined;
         await user.save();
 
         const text = `The password for your ANM-Shop account (${user.email}) was changed on ${user.passwordChangedAt.toLocaleString('en-IN')}. You have been signed out on other devices. If you did not make this change, contact ANM-Shop support right away.`;
-        const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#33252e"><h1 style="color:#754656">Your password was changed</h1><p>${text}</p></div>`;
+        const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#33252e"><h1 style="color:#754656">Your password was changed</h1><p>${escapeHtml(text)}</p></div>`;
         // A failed notice shouldn't undo the change; it is only logged.
         sendEmail(user.email, 'Your ANM-Shop password was changed', text, html)
             .then((sent) => sent || console.error('Password change notice was not sent'))
@@ -243,6 +253,114 @@ const changePassword = async (req, res) => {
     }
 };
 
+// Always answers the same way so the form can't be used to discover which emails have accounts.
+const forgotPassword = async (req, res) => {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const genericResponse = { message: 'If an account exists for this email, a password reset link is on its way. It expires in 30 minutes.' };
+    if (!email || email.length > 254) return res.json(genericResponse);
+
+    try {
+        const user = await User.findOne({ email }).select('+passwordResetSentAt');
+        if (!user) return res.json(genericResponse);
+        const lastSent = user.passwordResetSentAt?.getTime() || 0;
+        if (Date.now() - lastSent < OTP_RESEND_WAIT_MS) return res.json(genericResponse);
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const link = `${storefrontUrl()}/reset-password?token=${token}`;
+        const text = `Someone asked to reset the password for your ANM-Shop account (${user.email}). Open this link within 30 minutes to choose a new password: ${link} If you didn't ask for this, ignore this email; your password stays the same.`;
+        const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#33252e"><h1 style="color:#754656">Reset your ANM-Shop password</h1><p>Someone asked to reset the password for your ANM-Shop account (${escapeHtml(user.email)}).</p><p><a href="${link}" style="display:inline-block;padding:12px 20px;background:#754656;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Choose a new password</a></p><p>This link works once and expires in 30 minutes. If you didn't ask for this, ignore this email; your password stays the same.</p></div>`;
+
+        const sentAt = new Date();
+        user.passwordResetTokenHash = hashResetToken(token);
+        user.passwordResetExpiresAt = new Date(sentAt.getTime() + RESET_TTL_MS);
+        user.passwordResetSentAt = sentAt;
+        await user.save();
+
+        const sent = await sendEmail(user.email, 'Reset your ANM-Shop password', text, html);
+        if (!sent) console.error('Password reset email could not be sent');
+        return res.json(genericResponse);
+    } catch (error) {
+        console.error('Forgot password error:', error.message);
+        return res.status(500).json({ message: 'Unable to process the request' });
+    }
+};
+
+const resetPassword = async (req, res) => {
+    const token = typeof req.body.token === 'string' ? req.body.token.trim() : '';
+    const { password } = req.body;
+    if (!/^[a-f\d]{64}$/.test(token)) {
+        return res.status(400).json({ message: 'This reset link is invalid or has expired. Request a new one.' });
+    }
+    if (!isValidNewPassword(password)) {
+        return res.status(400).json({ message: 'The new password must be between 8 and 72 bytes' });
+    }
+
+    try {
+        // Clearing the hash in the same atomic update makes each link single-use.
+        const user = await User.findOneAndUpdate(
+            { passwordResetTokenHash: hashResetToken(token), passwordResetExpiresAt: { $gt: new Date() } },
+            {
+                $set: {
+                    password: await bcrypt.hash(password, 12),
+                    passwordChangedAt: new Date(),
+                    // Opening the emailed link proves the inbox, so this also verifies the account.
+                    verified: true,
+                },
+                $unset: {
+                    passwordResetTokenHash: 1,
+                    passwordResetExpiresAt: 1,
+                    verificationOtpHash: 1,
+                    verificationOtpExpiresAt: 1,
+                    verificationOtpSentAt: 1,
+                    verificationOtpAttempts: 1,
+                },
+            },
+            { new: true },
+        );
+        if (!user) {
+            return res.status(400).json({ message: 'This reset link is invalid or has expired. Request a new one.' });
+        }
+
+        return res.json({
+            message: 'Password reset. You have been signed out on other devices.',
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                token: generateToken(user._id),
+            },
+        });
+    } catch (error) {
+        console.error('Reset password error:', error.message);
+        return res.status(500).json({ message: 'Unable to reset password' });
+    }
+};
+
+// Orders and payment records are kept (they show as "Deleted account"); the account's
+// sign-in tokens stop working because `protect` no longer finds the user.
+const deleteUser = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid user ID' });
+    }
+    if (req.user._id.equals(req.params.id)) {
+        return res.status(409).json({ message: "You can't delete your own account while signed in to it" });
+    }
+
+    try {
+        const user = await User.findById(req.params.id).select('role');
+        if (!user) return res.status(404).json({ message: 'Account not found' });
+        if (user.role === 'admin') {
+            return res.status(409).json({ message: "Admin accounts can't be deleted here" });
+        }
+        await user.deleteOne();
+        return res.json({ message: 'Account deleted. Their orders and payments are kept as records.' });
+    } catch (error) {
+        console.error('Delete user error:', error.message);
+        return res.status(500).json({ message: 'Unable to delete account' });
+    }
+};
+
 const getUsers = async (req, res) => {
     try {
         const users = await User.find({}).select(
@@ -254,4 +372,7 @@ const getUsers = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, verifyEmail, resendVerificationOtp, loginUser, changePassword, getUsers };
+module.exports = {
+    registerUser, verifyEmail, resendVerificationOtp, loginUser, changePassword,
+    forgotPassword, resetPassword, deleteUser, getUsers,
+};
