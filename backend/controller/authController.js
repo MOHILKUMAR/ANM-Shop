@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../model/User');
+const Order = require('../model/Order');
 const sendEmail = require('../utils/sendEmail');
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -361,13 +362,35 @@ const deleteUser = async (req, res) => {
     }
 };
 
+// Every account with its order totals, newest first. Fields are allow-listed so password
+// hashes and verification/reset secrets can never leak into this list or its Excel export.
 const getUsers = async (req, res) => {
     try {
-        const users = await User.find({}).select(
-            '-password -verificationOtpHash -verificationOtpExpiresAt -verificationOtpSentAt -verificationOtpAttempts',
-        );
-        return res.json(users);
+        const [users, orderStats] = await Promise.all([
+            User.find({}).select('name email role verified').sort({ _id: -1 }).lean(),
+            Order.aggregate([
+                { $group: {
+                    _id: '$user',
+                    orderCount: { $sum: 1 },
+                    totalSpent: { $sum: '$totalAmount' },
+                    lastOrderAt: { $max: '$createdAt' },
+                } },
+            ]),
+        ]);
+        const statsByUser = new Map(orderStats.map((stats) => [String(stats._id), stats]));
+        return res.json(users.map((user) => {
+            const stats = statsByUser.get(String(user._id));
+            return {
+                ...user,
+                // Accounts have no createdAt field; an ObjectId records when it was created.
+                joinedAt: user._id.getTimestamp(),
+                orderCount: stats?.orderCount || 0,
+                totalSpent: stats?.totalSpent || 0,
+                lastOrderAt: stats?.lastOrderAt || null,
+            };
+        }));
     } catch (error) {
+        console.error('Fetch users error:', error.message);
         return res.status(500).json({ message: 'Unable to fetch users' });
     }
 };

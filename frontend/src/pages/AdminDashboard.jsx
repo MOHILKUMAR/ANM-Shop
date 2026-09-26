@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import AdminSearch from "../components/AdminSearch.jsx";
+import AdminUsers from "../components/AdminUsers.jsx";
+import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
 import { beautyCategories } from "../data/beautyCategories.js";
 
 // The shared list holds { name, description, icon } for the home page; the admin form needs names.
@@ -26,6 +28,8 @@ function AdminDashboard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  // True until the first dashboard load succeeds or fails.
+  const loadingData = !stats && !error;
 
   useEffect(() => {
     if (user?.role !== "admin") return undefined;
@@ -160,6 +164,8 @@ function AdminDashboard() {
       {error && <p className="mb-5 rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
       {notice && <p className="mb-5 rounded-lg bg-green-50 p-4 text-green-800" role="status">{notice}</p>}
 
+      {/* Stats, products, and orders arrive together, so one flag covers the first load. */}
+      {loadingData ? <StatTilesSkeleton /> : (
       <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           ["Customers", stats?.totalUser],
@@ -176,6 +182,7 @@ function AdminDashboard() {
           </article>
         ))}
       </section>
+      )}
 
       {stats && (
         <section className="mb-10 grid gap-5 lg:grid-cols-3" aria-label="Store analytics">
@@ -250,7 +257,7 @@ function AdminDashboard() {
       )}
 
       <div className="mb-6 flex gap-3 border-b border-gray-200">
-        {["products", "orders", "search"].map((item) => (
+        {["products", "orders", "users", "search"].map((item) => (
           <button className={`border-b-2 px-4 py-3 font-semibold capitalize ${tab === item ? "border-brand-600 text-brand-800" : "border-transparent text-gray-500"}`} key={item} type="button" onClick={() => setTab(item)}>{item}</button>
         ))}
       </div>
@@ -285,7 +292,8 @@ function AdminDashboard() {
           </form>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-gray-900">Beauty catalog ({productPagination.total})</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Beauty catalog{loadingData ? "" : ` (${productPagination.total})`}</h2>
+            {loadingData && <ListSkeleton rows={5} withThumbnail label="Loading products" />}
             {products.map((item) => (
               <article className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4" key={item._id}>
                 <img className="h-16 w-16 rounded-lg bg-gray-50 object-contain" src={item.imageUrls} alt="" />
@@ -297,7 +305,7 @@ function AdminDashboard() {
                 <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteProduct(item._id)}>Delete</button>
               </article>
             ))}
-            {products.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No products found.</p>}
+            {!loadingData && products.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No products found.</p>}
             {productPagination.pages > 1 && (
               <nav className="flex items-center justify-end gap-3 pt-3" aria-label="Admin catalog pages">
                 <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40" type="button" disabled={productPage <= 1} onClick={() => setProductPage((current) => current - 1)}>Previous</button>
@@ -309,9 +317,12 @@ function AdminDashboard() {
         </div>
       ) : tab === "search" ? (
         <AdminSearch token={user.token} />
+      ) : tab === "users" ? (
+        <AdminUsers token={user.token} />
       ) : (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Customer orders ({orders.length})</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Customer orders{loadingData ? "" : ` (${orders.length})`}</h2>
+          {loadingData && <ListSkeleton rows={4} label="Loading orders" />}
           {orders.map((order) => (
             <article className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 md:flex-row md:items-center" key={order._id}>
               <div className="min-w-0 flex-1">
@@ -327,7 +338,7 @@ function AdminDashboard() {
               <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
             </article>
           ))}
-          {orders.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders yet.</p>}
+          {!loadingData && orders.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders yet.</p>}
         </section>
       )}
     </main>

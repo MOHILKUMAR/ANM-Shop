@@ -5,6 +5,8 @@
 	--page-bg: #fbf8f5;
 	--surface: #ffffff;
 	--surface-muted: #f7f2ee;
+	--skeleton: #eee4df;
+	--skeleton-shine: rgb(255 255 255 / 60%);
 	--text-primary: #2f252b;
 	--text-secondary: #71646c;
 	--border-subtle: #e9e0dc;
@@ -28,6 +30,8 @@ html[data-theme="dark"] {
 	--page-bg: #191519;
 	--surface: #241e23;
 	--surface-muted: #30272e;
+	--skeleton: #3a3037;
+	--skeleton-shine: rgb(255 255 255 / 7%);
 	--text-primary: #f7f0eb;
 	--text-secondary: #c2b5bc;
 	--border-subtle: #493b44;
@@ -94,6 +98,28 @@ html[data-theme="dark"] .gradient-action { color: var(--brand-700); }
 }
 .gradient-icon-action:hover { transform: translateY(-1px); }
 html[data-theme="dark"] .gradient-icon-action { color: var(--brand-700); }
+
+/* Loading placeholders: a soft band sweeps across each block while data loads. */
+.shimmer {
+	position: relative;
+	overflow: hidden;
+	border-radius: 0.5rem;
+	background-color: var(--skeleton);
+}
+.shimmer::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	transform: translateX(-100%);
+	background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+	animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+	100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.shimmer::after { animation: none; }
+}
 
 body {
 	min-width: 320px;

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import CartContext from "../context/CartContext.js";
 import AuthContext from "../context/AuthContext.js";
+import { ProductDetailSkeleton } from "../components/Skeletons.jsx";
 
 function ProductDetail() {
   const { id } = useParams();
@@ -59,7 +60,7 @@ function ProductDetail() {
     }
   }
 
-  if (loading) return <main className="mx-auto min-h-[60vh] max-w-7xl px-4 py-16 text-center">Loading product…</main>;
+  if (loading) return <ProductDetailSkeleton />;
   if (error || !product) {
     return (
       <main className="mx-auto min-h-[60vh] max-w-7xl px-4 py-16 text-center">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import ProductCard from "../components/ProductCard.jsx";
+import { ProductGridSkeleton, Shimmer } from "../components/Skeletons.jsx";
 
 function Shop() {
   const [products, setProducts] = useState([]);
@@ -90,8 +91,10 @@ function Shop() {
         </div>
       </div>
 
-      <p className="mb-4 text-sm text-gray-500">{pagination.total} product{pagination.total === 1 ? "" : "s"}</p>
-      {loading && <p className="py-16 text-center text-gray-600">Loading products…</p>}
+      {loading
+        ? <Shimmer className="mb-4 h-5 w-24" />
+        : <p className="mb-4 text-sm text-gray-500">{pagination.total} product{pagination.total === 1 ? "" : "s"}</p>}
+      {loading && <ProductGridSkeleton />}
       {!loading && error && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
           <h2 className="font-semibold">Couldn’t load the store</h2>
