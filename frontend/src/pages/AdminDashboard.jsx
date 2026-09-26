@@ -4,6 +4,9 @@ import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import { beautyCategories } from "../data/beautyCategories.js";
 
+// The shared list holds { name, description, icon } for the home page; the admin form needs names.
+const categoryNames = beautyCategories.map((category) => category.name);
+
 const emptyProduct = { name: "", description: "", price: "", category: "Skincare", stock: "" };
 const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
@@ -129,7 +132,7 @@ function AdminDashboard() {
       name: item.name,
       description: item.description,
       price: String(item.price),
-      category: beautyCategories.includes(item.category) ? item.category : "Skincare",
+      category: categoryNames.includes(item.category) ? item.category : "Skincare",
       stock: String(item.stock),
     });
     setImage(null);
@@ -256,7 +259,7 @@ function AdminDashboard() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="product-category">Category</label>
               <select className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand-500" id="product-category" required value={product.category} onChange={(event) => setProduct((current) => ({ ...current, category: event.target.value }))}>
-                {beautyCategories.map((category) => <option value={category} key={category}>{category}</option>)}
+                {categoryNames.map((category) => <option value={category} key={category}>{category}</option>)}
               </select>
             </div>
             <div>
