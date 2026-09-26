@@ -9,6 +9,8 @@ import Checkout from "./pages/Checkout";
 import AuthPage from "./pages/AuthPage";
 import OrderHistory from "./pages/OrderHistory";
 import Account from "./pages/Account";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
 import VerifyEmail from "./pages/VerifyEmail";
 import About from "./pages/About";
@@ -34,6 +36,8 @@ function App() {
             <Route path="/login" element={<AuthPage />} />
             <Route path="/register" element={<AuthPage register />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/orders" element={<OrderHistory />} />
             <Route path="/account" element={<Account />} />
             <Route path="/admin" element={<AdminDashboard />} />

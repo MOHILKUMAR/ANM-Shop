@@ -105,6 +105,11 @@ function AuthPage({ register = false }) {
               </button>
             </div>
             {register && <p className="mt-1 text-xs text-gray-500">Use at least 8 characters.</p>}
+            {!register && (
+              <p className="mt-2 text-right text-sm">
+                <Link className="font-semibold text-brand-700 hover:text-brand-900" to="/forgot-password">Forgot password?</Link>
+              </p>
+            )}
           </div>
           {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
           <button className="gradient-action w-full justify-center py-3 disabled:cursor-wait disabled:opacity-60" type="submit" disabled={submitting}>

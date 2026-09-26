@@ -305,6 +305,10 @@ const verifyPayment = async (req, res) => {
                 order: result.order,
             });
         }
+        if (result.intent?.status === 'completed') {
+            // Paid and fulfilled earlier, but an admin has since deleted the order.
+            return res.status(409).json({ message: 'This payment was already processed. Contact support about this order.' });
+        }
         if (result.intent && result.intent.status !== 'pending') {
             return refundResponse(res, result.intent);
         }
@@ -368,4 +372,31 @@ const razorpayWebhook = async (req, res) => {
     }
 };
 
-module.exports = { createdOrder, verifyPayment, razorpayWebhook };
+const RECENT_CHECKOUT_MS = 24 * 60 * 60 * 1000;
+
+// Admin cleanup of checkout records. Records that still matter for money are protected:
+// a recent unpaid checkout may yet be paid (deleting it would leave a captured payment with
+// no order and no automatic refund), and a refund_pending record is mid-refund. The admin
+// UI warns before deleting refund_failed, which only changes once refunded by hand.
+const deletePaymentRecord = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid payment record ID' });
+    }
+    try {
+        const intent = await PaymentIntent.findById(req.params.id).select('status createdAt');
+        if (!intent) return res.status(404).json({ message: 'Payment record not found' });
+        if (intent.status === 'pending' && Date.now() - intent.createdAt.getTime() < RECENT_CHECKOUT_MS) {
+            return res.status(409).json({ message: 'This checkout is less than 24 hours old and may still be paid. Try again later.' });
+        }
+        if (intent.status === 'refund_pending') {
+            return res.status(409).json({ message: 'A refund for this payment is in progress. Try again once it finishes.' });
+        }
+        await intent.deleteOne();
+        return res.json({ message: 'Payment record deleted' });
+    } catch (error) {
+        console.error('Delete payment record error:', error.message);
+        return res.status(500).json({ message: 'Unable to delete payment record' });
+    }
+};
+
+module.exports = { createdOrder, verifyPayment, razorpayWebhook, deletePaymentRecord };

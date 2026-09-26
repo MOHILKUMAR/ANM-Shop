@@ -29,6 +29,10 @@ const userShema = new mongoose.Schema({
     verificationOtpAttempts: { type: Number, default: 0, select: false },
     // Sign-in tokens issued before this moment stop working (see authMiddleware).
     passwordChangedAt: { type: Date },
+    // Forgot-password link: only a SHA-256 hash of the emailed token is stored.
+    passwordResetTokenHash: { type: String, select: false },
+    passwordResetExpiresAt: { type: Date, select: false },
+    passwordResetSentAt: { type: Date, select: false },
 });
 
 module.exports = mongoose.model("User", userShema);

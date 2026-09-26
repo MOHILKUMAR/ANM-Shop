@@ -14,6 +14,32 @@ const paymentStatus = {
   refund_failed: ["Refund failed - refund manually", "bg-red-50 text-red-700"],
 };
 
+// Each confirmation spells out what the delete does and does not undo.
+const deleteRequests = {
+  order: (order) => ({
+    path: `/orders/${order._id}`,
+    confirm: `Delete order ${shortId(order._id)}?\n\nThis removes the order record only. It does NOT refund the customer or restore stock. The payment record is kept.`,
+  }),
+  payment: (payment) => ({
+    path: `/payment/records/${payment._id}`,
+    confirm: payment.status === "refund_failed"
+      ? `The automatic refund for this payment failed.\n\nOnly delete this record after you have refunded ${payment.paymentId || "the payment"} manually in Razorpay. Delete it now?`
+      : "Delete this payment record?\n\nThis only removes the store's record. The payment in Razorpay is not changed or refunded.",
+  }),
+  user: (user) => ({
+    path: `/auth/users/${user._id}`,
+    confirm: `Delete the account for ${user.email}?\n\nThey will be signed out and can't sign in again. Their orders and payments are kept as records.`,
+  }),
+};
+
+function DeleteButton({ label, onClick }) {
+  return (
+    <button className="rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={onClick}>
+      {label}
+    </button>
+  );
+}
+
 function StatusBadge({ status }) {
   const [label, className] = paymentStatus[status] || [status, "bg-gray-100 text-gray-700"];
   return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${className}`}>{label}</span>;
@@ -38,7 +64,7 @@ function Field({ label, children }) {
   );
 }
 
-function OrderResult({ order, onSearch }) {
+function OrderResult({ order, onSearch, onDelete }) {
   const address = order.address || {};
   return (
     <article className="rounded-xl border border-gray-200 bg-white p-5">
@@ -47,7 +73,10 @@ function OrderResult({ order, onSearch }) {
           <h4 className="font-semibold text-gray-900">Order {shortId(order._id)}</h4>
           <p className="mt-1 font-mono text-xs text-gray-500">{order._id}</p>
         </div>
-        <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium capitalize text-brand-800">{order.status}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium capitalize text-brand-800">{order.status}</span>
+          <DeleteButton label="Delete order" onClick={() => onDelete("order", order)} />
+        </div>
       </div>
       <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Customer">{order.user?.name || "Deleted account"}<br /><span className="text-gray-500">{order.user?.email || ""}</span></Field>
@@ -72,7 +101,7 @@ function OrderResult({ order, onSearch }) {
   );
 }
 
-function PaymentResult({ payment, onSearch }) {
+function PaymentResult({ payment, onSearch, onDelete }) {
   return (
     <article className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-3">
@@ -80,7 +109,10 @@ function PaymentResult({ payment, onSearch }) {
           <h4 className="font-semibold text-gray-900">{money(payment.amountPaise / 100)} checkout</h4>
           <p className="mt-1 text-sm text-gray-500">{payment.user?.name || "Deleted account"} {payment.user?.email ? `| ${payment.user.email}` : ""}</p>
         </div>
-        <StatusBadge status={payment.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={payment.status} />
+          <DeleteButton label="Delete record" onClick={() => onDelete("payment", payment)} />
+        </div>
       </div>
       <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Razorpay payment ID"><IdLink value={payment.paymentId} onSearch={onSearch} /></Field>
@@ -95,7 +127,7 @@ function PaymentResult({ payment, onSearch }) {
   );
 }
 
-function CustomerResult({ customer, onSearch }) {
+function CustomerResult({ customer, onSearch, onDelete }) {
   const { user } = customer;
   return (
     <article className="rounded-xl border border-gray-200 bg-white p-5">
@@ -108,6 +140,8 @@ function CustomerResult({ customer, onSearch }) {
         <div className="flex flex-wrap gap-2 text-xs font-semibold">
           {user.role === "admin" && <span className="rounded-full bg-brand-50 px-3 py-1 text-brand-800">Admin</span>}
           <span className={`rounded-full px-3 py-1 ${user.verified ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{user.verified ? "Verified" : "Not verified"}</span>
+          {/* Admin accounts are protected on the server; already-deleted accounts have no email. */}
+          {user.role !== "admin" && user.email && <DeleteButton label="Delete account" onClick={() => onDelete("user", user)} />}
         </div>
       </div>
       <p className="mt-4 text-sm text-gray-700">{customer.orderCount} order{customer.orderCount === 1 ? "" : "s"} | {money(customer.totalSpent)} spent</p>
@@ -165,6 +199,7 @@ function AdminSearch({ token }) {
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   async function runSearch(value) {
     const term = value.trim();
@@ -172,6 +207,7 @@ function AdminSearch({ token }) {
     setQuery(term);
     setSearching(true);
     setError("");
+    setNotice("");
     try {
       setResults(await apiRequest(`/admin/search?q=${encodeURIComponent(term)}`, { token }));
     } catch (requestError) {
@@ -179,6 +215,20 @@ function AdminSearch({ token }) {
       setError(requestError.message);
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function deleteRecord(kind, record) {
+    const { path, confirm } = deleteRequests[kind](record);
+    if (!window.confirm(confirm)) return;
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiRequest(path, { method: "DELETE", token });
+      await runSearch(results.query); // refresh so the deleted record disappears
+      setNotice(result.message);
+    } catch (requestError) {
+      setError(requestError.message);
     }
   }
 
@@ -196,17 +246,18 @@ function AdminSearch({ token }) {
       </form>
 
       {error && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
+      {notice && <p className="rounded-lg bg-green-50 p-4 text-green-800" role="status">{notice}</p>}
       {results && total === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders, payments, or customers match "{results.query}".</p>}
       {results && total > 0 && (
         <div className="space-y-8">
           <ResultSection title="Orders" count={results.orders.length}>
-            {results.orders.map((order) => <OrderResult key={order._id} order={order} onSearch={runSearch} />)}
+            {results.orders.map((order) => <OrderResult key={order._id} order={order} onSearch={runSearch} onDelete={deleteRecord} />)}
           </ResultSection>
           <ResultSection title="Payments" count={results.payments.length}>
-            {results.payments.map((payment) => <PaymentResult key={payment._id} payment={payment} onSearch={runSearch} />)}
+            {results.payments.map((payment) => <PaymentResult key={payment._id} payment={payment} onSearch={runSearch} onDelete={deleteRecord} />)}
           </ResultSection>
           <ResultSection title="Customers" count={results.customers.length}>
-            {results.customers.map((customer) => <CustomerResult key={customer.user._id} customer={customer} onSearch={runSearch} />)}
+            {results.customers.map((customer) => <CustomerResult key={customer.user._id} customer={customer} onSearch={runSearch} onDelete={deleteRecord} />)}
           </ResultSection>
         </div>
       )}

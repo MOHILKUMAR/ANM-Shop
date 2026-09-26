@@ -112,6 +112,19 @@ function AdminDashboard() {
     }
   }
 
+  async function deleteOrder(order) {
+    const code = `#${order._id.slice(-8).toUpperCase()}`;
+    if (!window.confirm(`Delete order ${code}?\n\nThis removes the order record only. It does NOT refund the customer or restore stock. The payment record is kept.`)) return;
+    setError("");
+    try {
+      const result = await apiRequest(`/orders/${order._id}`, { method: "DELETE", token: user.token });
+      setNotice(result.message);
+      setRefreshKey((key) => key + 1);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
   async function updateStatus(orderId, status) {
     setError("");
     try {
@@ -311,6 +324,7 @@ function AdminDashboard() {
               <select className="rounded-lg border border-gray-300 px-3 py-2 capitalize" id={`status-${order._id}`} value={order.status} onChange={(event) => updateStatus(order._id, event.target.value)}>
                 {["pending", "shipped", "delivered"].map((status) => <option className="capitalize" key={status} value={status}>{status}</option>)}
               </select>
+              <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
             </article>
           ))}
           {orders.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders yet.</p>}
