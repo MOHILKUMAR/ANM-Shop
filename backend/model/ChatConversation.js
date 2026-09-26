@@ -14,7 +14,7 @@ const transcriptEntrySchema = new mongoose.Schema(
 const chatConversationSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-    // The exact Claude API message history (tool calls and thinking blocks included), stored
+    // The exact Gemini API history (function calls and thought signatures included), stored
     // as a JSON string so it is replayed byte-for-byte on the next turn.
     apiMessages: { type: String, default: '[]' },
     // What the customer sees in the chat window.

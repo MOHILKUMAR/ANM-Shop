@@ -1,4 +1,4 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const { ApiError } = require('@google/genai');
 const ChatConversation = require('../model/ChatConversation');
 const { runAssistantTurn, isAssistantConfigured } = require('../utils/supportAssistant');
 
@@ -71,7 +71,7 @@ const sendChatMessage = async (req, res) => {
     }
 
     const sentAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
-    const history = [...JSON.parse(conversation.apiMessages), { role: 'user', content: `[Sent ${sentAt} IST] ${text}` }];
+    const history = [...JSON.parse(conversation.apiMessages), { role: 'user', parts: [{ text: `[Sent ${sentAt} IST] ${text}` }] }];
     const customerEntry = { role: 'customer', text, at: new Date() };
     const transcript = [...conversation.transcript.map((entry) => entry.toObject()), customerEntry];
 
@@ -95,14 +95,16 @@ const sendChatMessage = async (req, res) => {
         });
     } catch (error) {
         await release().catch(() => {});
-        if (error instanceof Anthropic.RateLimitError) {
-            return res.status(503).json({ message: 'The assistant is busy right now. Please try again in a minute.' });
+        if (error instanceof ApiError && error.status === 429) {
+            // On the free tier this is usually the per-minute or daily quota.
+            return res.status(503).json({ message: 'The assistant has reached its usage limit for now. Please try again later, or open a ticket on the Support page.' });
         }
-        if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
-            console.error('Support assistant credentials rejected:', error.status);
+        if (error instanceof ApiError && [400, 401, 403].includes(error.status)) {
+            // Gemini reports an invalid or restricted API key as 400/403.
+            console.error('Support assistant request rejected:', error.status, error.message);
             return res.status(503).json({ message: 'The support assistant is not available right now. You can open a ticket on the Support page.' });
         }
-        if (error instanceof Anthropic.APIError) {
+        if (error instanceof ApiError) {
             console.error('Support assistant API error:', error.status, error.message);
             return res.status(502).json({ message: 'The assistant could not answer just now. Please try again.' });
         }

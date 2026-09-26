@@ -1,4 +1,4 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenAI, FunctionCallingConfigMode, ThinkingLevel } = require('@google/genai');
 const mongoose = require('mongoose');
 const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
@@ -8,13 +8,14 @@ const beautyCategories = require('../constants/beautyCategories');
 const { shortCode, customerOrderFilter } = require('./orderLookup');
 const { TicketError, createTicket, statusLabels, TICKET_CATEGORIES } = require('./tickets');
 
-const MODEL = 'claude-opus-5';
+// A pinned stable Flash model on the Gemini API free tier (override with GEMINI_MODEL). The
+// "-latest" aliases are avoided because Google swaps them to preview releases without notice.
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 // Tool-calling rounds per customer message; the last round must answer in text.
 const MAX_TOOL_ROUNDS = 6;
 const REFUSAL_REPLY = "Sorry, I can't help with that here. For anything about your orders, payments, or refunds, just ask, or open a ticket on the Support page.";
 const EMPTY_REPLY = "Sorry, I couldn't put an answer together. Please try again, or open a ticket on the Support page.";
 
-// Kept byte-identical between requests so it is served from the prompt cache.
 const SYSTEM_PROMPT = `You are the ANM-Shop support assistant, chatting with a signed-in customer on the ANM-Shop beauty store website. The store is in India and prices are in INR.
 
 What you can do with your tools:
@@ -34,18 +35,18 @@ Rules:
 - Help only with shopping at ANM-Shop and with this customer's orders, payments, and tickets; politely decline anything else.
 - If a product request is ambiguous, confirm which product and quantity before adding it to the cart.
 
-Style: Latency-sensitive; begin your visible answer immediately. Reply in plain text without Markdown, in the customer's language, in a few short sentences. Refer to orders and tickets by their code, such as #9B54D5F2.`;
+Style: Reply in plain text without Markdown, in the customer's language, in a few short sentences. Refer to orders and tickets by their code, such as #9B54D5F2.`;
 
 const TOOLS = [
     {
         name: 'list_my_orders',
         description: "List this customer's 10 most recent orders, newest first: code, date, status, items, total, and payment ID. Call this when the customer asks about their orders, a delivery, or an order without giving its code.",
-        input_schema: { type: 'object', properties: {}, additionalProperties: false },
+        parametersJsonSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
         name: 'get_order',
         description: "Get one of this customer's orders by its code (for example #9B54D5F2) with its items, status, and the payment and refund record behind it. Call this before discussing or opening a ticket about a specific order.",
-        input_schema: {
+        parametersJsonSchema: {
             type: 'object',
             properties: {
                 order_code: { type: 'string', description: 'The 8-character order code, with or without #, or the full order ID' },
@@ -57,12 +58,12 @@ const TOOLS = [
     {
         name: 'list_my_payments',
         description: "List this customer's 10 most recent payment records (checkout attempts), newest first, with amount, status, Razorpay payment ID, refund ID, and refund reason. Call this for questions about a charge, a failed or double payment, or a refund.",
-        input_schema: { type: 'object', properties: {}, additionalProperties: false },
+        parametersJsonSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
         name: 'search_products',
         description: 'Search the ANM-Shop catalog by name or keyword and/or category. Returns up to 8 products with product_id, price, and stock. Call this before adding anything to the cart.',
-        input_schema: {
+        parametersJsonSchema: {
             type: 'object',
             properties: {
                 query: { type: 'string', description: 'Words from the product name or description, e.g. "vitamin c serum"' },
@@ -74,7 +75,7 @@ const TOOLS = [
     {
         name: 'add_to_cart',
         description: "Add a product to the customer's cart. Use a product_id returned by search_products. The customer then pays on the checkout page.",
-        input_schema: {
+        parametersJsonSchema: {
             type: 'object',
             properties: {
                 product_id: { type: 'string', description: 'product_id from search_products' },
@@ -87,7 +88,7 @@ const TOOLS = [
     {
         name: 'create_support_ticket',
         description: 'Open a support ticket for the ANM-Shop team when the customer needs a person to act or asks for a ticket. Returns the ticket code to give the customer.',
-        input_schema: {
+        parametersJsonSchema: {
             type: 'object',
             properties: {
                 subject: { type: 'string', description: 'Short summary, up to 150 characters, e.g. "Refund not received for #9B54D5F2"' },
@@ -102,7 +103,7 @@ const TOOLS = [
     {
         name: 'list_my_tickets',
         description: "List this customer's support tickets with status and the team's latest reply. Call this when the customer asks about a ticket or an earlier complaint.",
-        input_schema: { type: 'object', properties: {}, additionalProperties: false },
+        parametersJsonSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
 ];
 
@@ -253,31 +254,35 @@ const toolHandlers = {
     },
 };
 
-const runTool = async (block, context) => {
-    const handler = toolHandlers[block.name];
+// Answers one function call; errors go back to the model as data so it can recover.
+const runTool = async (call, context) => {
+    const handler = toolHandlers[call.name];
+    const respond = (response) => ({ functionResponse: { id: call.id, name: call.name, response } });
     try {
-        if (!handler) throw new ToolInputError(`Unknown tool ${block.name}`);
-        const input = block.input && typeof block.input === 'object' ? block.input : {};
-        const result = await handler(input, context);
-        return { type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) };
+        if (!handler) throw new ToolInputError(`Unknown tool ${call.name}`);
+        const input = call.args && typeof call.args === 'object' ? call.args : {};
+        return respond({ result: await handler(input, context) });
     } catch (error) {
-        if (error instanceof ToolInputError || error instanceof TicketError) {
-            return { type: 'tool_result', tool_use_id: block.id, is_error: true, content: error.message };
-        }
-        console.error(`Assistant tool ${block.name} failed:`, error.message);
-        return { type: 'tool_result', tool_use_id: block.id, is_error: true, content: 'The store system could not complete this. Suggest the customer try again or open a ticket.' };
+        if (error instanceof ToolInputError || error instanceof TicketError) return respond({ error: error.message });
+        console.error(`Assistant tool ${call.name} failed:`, error.message);
+        return respond({ error: 'The store system could not complete this. Suggest the customer try again or open a ticket.' });
     }
 };
 
+// The SDK reads GEMINI_API_KEY from the environment.
 let client;
 const getClient = () => {
-    client ??= new Anthropic({ timeout: 60 * 1000 });
+    client ??= new GoogleGenAI({});
     return client;
 };
 
-const isAssistantConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+const isAssistantConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 
-const replyText = (content) => content.filter((block) => block.type === 'text').map((block) => block.text).join('\n').trim();
+// Gemini stops without a usable answer for these; the customer gets a polite decline instead.
+const BLOCKED_FINISH_REASONS = new Set(['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII']);
+
+// The visible reply; parts marked "thought" are the model's reasoning, not the answer.
+const replyText = (parts) => parts.filter((part) => part.text && !part.thought).map((part) => part.text).join('\n').trim();
 
 // Runs one customer turn: `messages` already ends with the customer's message. Returns the
 // full updated history (append-only), the reply text, and the actions to apply in the browser.
@@ -287,42 +292,46 @@ const runAssistantTurn = async (messages, user, onProgress) => {
     const actions = [];
 
     for (let round = 0; ; round += 1) {
-        const response = await getClient().beta.messages.create({
+        const response = await getClient().models.generateContent({
             model: MODEL,
-            max_tokens: 16000,
-            // If a safety classifier declines a benign support question, the API retries it on
-            // Anthropic's recommended fallback model instead of returning a refusal.
-            betas: ['server-side-fallback-2026-07-01'],
-            fallbacks: 'default',
-            output_config: { effort: 'low' },
-            cache_control: { type: 'ephemeral' },
-            system: SYSTEM_PROMPT,
-            tools: TOOLS,
-            tool_choice: round >= MAX_TOOL_ROUNDS ? { type: 'none' } : { type: 'auto' },
-            messages: history,
+            contents: history,
+            config: {
+                systemInstruction: SYSTEM_PROMPT,
+                tools: [{ functionDeclarations: TOOLS }],
+                toolConfig: {
+                    functionCallingConfig: {
+                        mode: round >= MAX_TOOL_ROUNDS ? FunctionCallingConfigMode.NONE : FunctionCallingConfigMode.AUTO,
+                    },
+                },
+                // Support answers need little reasoning; low thinking keeps replies quick and
+                // stretches the free-tier quota.
+                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+                httpOptions: { timeout: 60 * 1000 },
+            },
         });
 
-        if (response.stop_reason === 'refusal') {
-            history.push({ role: 'assistant', content: [{ type: 'text', text: REFUSAL_REPLY }] });
+        const candidate = response.candidates?.[0];
+        if (response.promptFeedback?.blockReason || !candidate || BLOCKED_FINISH_REASONS.has(candidate.finishReason)) {
+            history.push({ role: 'model', parts: [{ text: REFUSAL_REPLY }] });
             return { messages: history, reply: REFUSAL_REPLY, actions };
         }
 
-        const toolUses = response.content.filter((block) => block.type === 'tool_use');
-        if (response.stop_reason === 'tool_use' && toolUses.length) {
-            history.push({ role: 'assistant', content: response.content });
+        // Replayed exactly as returned: Gemini's thought signatures must come back unchanged.
+        const parts = candidate.content?.parts || [];
+        const calls = parts.filter((part) => part.functionCall).map((part) => part.functionCall);
+        if (calls.length) {
+            history.push({ role: 'model', parts });
             const results = [];
-            for (const block of toolUses) results.push(await runTool(block, { user, actions }));
-            // All results for one assistant turn go back in a single user message.
-            history.push({ role: 'user', content: results });
+            for (const call of calls) results.push(await runTool(call, { user, actions }));
+            // Every call from one model turn is answered together in a single user turn.
+            history.push({ role: 'user', parts: results });
             if (onProgress) await onProgress(history, actions);
             continue;
         }
 
-        // A tool call cut off by max_tokens would leave an unanswered tool_use in the history.
-        const content = response.content.filter((block) => block.type !== 'tool_use');
-        const text = replyText(content);
+        const text = replyText(parts);
         const reply = text || EMPTY_REPLY;
-        history.push({ role: 'assistant', content: text ? content : [...content, { type: 'text', text: reply }] });
+        history.push({ role: 'model', parts: text ? parts : [...parts, { text: reply }] });
         return { messages: history, reply, actions };
     }
 };
