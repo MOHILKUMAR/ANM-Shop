@@ -19,4 +19,13 @@ const invoiceEmailLimiter = createLimiter(5, 'Too many e-bill requests. Try agai
     keyGenerator: (req) => `user:${req.user._id}`,
 });
 
-module.exports = { authLimiter, otpLimiter, paymentLimiter, invoiceEmailLimiter };
+// Per-account limits below also run after `protect`.
+const perUser = { keyGenerator: (req) => `user:${req.user._id}` };
+// Every chat message is a paid model call, so this caps what one account can spend.
+const chatLimiter = createLimiter(30, 'You are sending messages too quickly. Wait a few minutes and try again.', perUser);
+const ticketLimiter = createLimiter(5, 'Too many new tickets. Try again later.', { ...perUser, windowMs: 60 * 60 * 1000 });
+const ticketReplyLimiter = createLimiter(30, 'Too many replies. Try again later.', perUser);
+
+module.exports = {
+    authLimiter, otpLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter,
+};
