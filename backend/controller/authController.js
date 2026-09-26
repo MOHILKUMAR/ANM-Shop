@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../model/User');
 const Order = require('../model/Order');
+const ChatConversation = require('../model/ChatConversation');
 const sendEmail = require('../utils/sendEmail');
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -355,7 +356,9 @@ const deleteUser = async (req, res) => {
             return res.status(409).json({ message: "Admin accounts can't be deleted here" });
         }
         await user.deleteOne();
-        return res.json({ message: 'Account deleted. Their orders and payments are kept as records.' });
+        // Chat history is personal; tickets stay with the orders and payments as records.
+        await ChatConversation.deleteOne({ user: user._id });
+        return res.json({ message: 'Account deleted. Their orders, payments, and tickets are kept as records.' });
     } catch (error) {
         console.error('Delete user error:', error.message);
         return res.status(500).json({ message: 'Unable to delete account' });

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import ChatWidget from "./components/ChatWidget";
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
 import ProductDetail from "./pages/ProductDetail";
@@ -11,6 +12,7 @@ import OrderHistory from "./pages/OrderHistory";
 import Account from "./pages/Account";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Support from "./pages/Support";
 import AdminDashboard from "./pages/AdminDashboard";
 import VerifyEmail from "./pages/VerifyEmail";
 import About from "./pages/About";
@@ -40,6 +42,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/orders" element={<OrderHistory />} />
             <Route path="/account" element={<Account />} />
+            <Route path="/support" element={<Support />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
@@ -48,6 +51,7 @@ function App() {
           </Routes>
         </div>
         <Footer />
+        <ChatWidget />
       </div>
     </BrowserRouter>
   )
