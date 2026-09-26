@@ -97,13 +97,19 @@ function Checkout() {
         modal: { ondismiss: () => setBusy(false) },
         handler: async (paymentResponse) => {
           try {
-            await apiRequest("/payment/verify", {
+            const verification = await apiRequest("/payment/verify", {
               method: "POST",
               token: user.token,
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(paymentResponse),
             });
             clearCart();
+            if (verification?.pending) {
+              // Paid but Razorpay is still capturing; the webhook will create the order.
+              setError(verification.message);
+              setBusy(false);
+              return;
+            }
             navigate("/orders", { replace: true });
           } catch (verificationError) {
             const { status, data } = verificationError;

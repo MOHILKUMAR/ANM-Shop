@@ -9,6 +9,7 @@ function VerifyEmail() {
   const { login } = useContext(AuthContext);
   const [email, setEmail] = useState(location.state?.email || "");
   const [otp, setOtp] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(
     location.state?.emailSent === false
@@ -28,7 +29,7 @@ function VerifyEmail() {
       const result = await apiRequest("/auth/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({ email, otp, password }),
       });
       login(result.user);
       navigate(location.state?.from || "/shop", { replace: true });
@@ -71,6 +72,11 @@ function VerifyEmail() {
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="verification-code">6-digit code</label>
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-center text-xl tracking-[0.4em] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id="verification-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="verification-password">Password</label>
+            <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id="verification-password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+            <p className="mt-1 text-xs text-gray-500">The password you chose when you signed up.</p>
           </div>
           {notice && <p className="rounded-lg bg-brand-50 p-3 text-sm text-brand-800" role="status">{notice}</p>}
           {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
