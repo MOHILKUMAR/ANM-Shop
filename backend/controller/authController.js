@@ -317,7 +317,7 @@ const resetPassword = async (req, res) => {
                     verificationOtpAttempts: 1,
                 },
             },
-            { new: true },
+            { returnDocument: 'after' },
         );
         if (!user) {
             return res.status(400).json({ message: 'This reset link is invalid or has expired. Request a new one.' });

@@ -1,4 +1,4 @@
-const { GoogleGenAI, FunctionCallingConfigMode, ThinkingLevel } = require('@google/genai');
+const { ApiError, GoogleGenAI, FunctionCallingConfigMode, ThinkingLevel } = require('@google/genai');
 const mongoose = require('mongoose');
 const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
@@ -11,6 +11,12 @@ const { TicketError, createTicket, statusLabels, TICKET_CATEGORIES } = require('
 // A pinned stable Flash model on the Gemini API free tier (override with GEMINI_MODEL). The
 // "-latest" aliases are avoided because Google swaps them to preview releases without notice.
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+// Used when the main model is overloaded, which happens often on the free tier. It must be a
+// Gemini 3 model: the thinkingLevel setting below is rejected by older models.
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash';
+// "High demand" and other temporary server errors are worth another try.
+const RETRYABLE_STATUSES = new Set([500, 502, 503, 504]);
+const ATTEMPTS_PER_MODEL = 2;
 // Tool-calling rounds per customer message; the last round must answer in text.
 const MAX_TOOL_ROUNDS = 6;
 const REFUSAL_REPLY = "Sorry, I can't help with that here. For anything about your orders, payments, or refunds, just ask, or open a ticket on the Support page.";
@@ -278,6 +284,28 @@ const getClient = () => {
 
 const isAssistantConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Tries the models in order from `startIndex`, retrying each briefly on temporary errors.
+// Returns the index of the model that answered so later rounds of the same turn stay on it.
+const generate = async (request, startIndex) => {
+    const models = [...new Set([MODEL, FALLBACK_MODEL])];
+    let lastError;
+    for (let index = startIndex; index < models.length; index += 1) {
+        for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL; attempt += 1) {
+            try {
+                return { response: await getClient().models.generateContent({ ...request, model: models[index] }), modelIndex: index };
+            } catch (error) {
+                if (!(error instanceof ApiError) || !RETRYABLE_STATUSES.has(error.status)) throw error;
+                lastError = error;
+                console.warn(`Gemini ${models[index]} attempt ${attempt} failed with ${error.status}`);
+                if (attempt < ATTEMPTS_PER_MODEL) await sleep(1000 * attempt);
+            }
+        }
+    }
+    throw lastError;
+};
+
 // Gemini stops without a usable answer for these; the customer gets a polite decline instead.
 const BLOCKED_FINISH_REASONS = new Set(['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII']);
 
@@ -290,10 +318,10 @@ const replyText = (parts) => parts.filter((part) => part.text && !part.thought).
 const runAssistantTurn = async (messages, user, onProgress) => {
     const history = [...messages];
     const actions = [];
+    let modelIndex = 0;
 
     for (let round = 0; ; round += 1) {
-        const response = await getClient().models.generateContent({
-            model: MODEL,
+        const generated = await generate({
             contents: history,
             config: {
                 systemInstruction: SYSTEM_PROMPT,
@@ -306,9 +334,12 @@ const runAssistantTurn = async (messages, user, onProgress) => {
                 // Support answers need little reasoning; low thinking keeps replies quick and
                 // stretches the free-tier quota.
                 thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-                httpOptions: { timeout: 60 * 1000 },
+                // Retries are handled by `generate` so they can move on to the fallback model.
+                httpOptions: { timeout: 60 * 1000, retryOptions: { attempts: 1 } },
             },
-        });
+        }, modelIndex);
+        modelIndex = generated.modelIndex;
+        const { response } = generated;
 
         const candidate = response.candidates?.[0];
         if (response.promptFeedback?.blockReason || !candidate || BLOCKED_FINISH_REASONS.has(candidate.finishReason)) {

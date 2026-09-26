@@ -23,7 +23,7 @@ const promoteAdmin = async () => {
                 verificationOtpAttempts: 1,
             },
         },
-        { new: true, runValidators: true },
+        { returnDocument: 'after', runValidators: true },
     );
 
     if (!user) {
