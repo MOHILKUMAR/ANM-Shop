@@ -22,7 +22,13 @@ const paymentIntentSchema = new mongoose.Schema(
     amountPaise: { type: Number, required: true, min: 1 },
     paymentId: { type: String },
     order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
-    status: { type: String, enum: ['pending', 'completed'], default: 'pending' },
+    status: {
+      type: String,
+      enum: ['pending', 'completed', 'refund_pending', 'refunded', 'refund_failed'],
+      default: 'pending',
+    },
+    refundId: { type: String },
+    failureReason: { type: String, maxlength: 200 },
   },
   { timestamps: true },
 );

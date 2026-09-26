@@ -4,6 +4,7 @@ const Razorpay = require('razorpay');
 const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
 const Product = require('../model/Product');
+const User = require('../model/User');
 const sendOrderInvoice = require('../utils/sendOrderInvoice');
 const beautyCategories = require('../constants/beautyCategories');
 
@@ -109,9 +110,131 @@ const createdOrder = async (req, res) => {
     }
 };
 
+const isShortString = (value, maxLength = 100) =>
+    typeof value === 'string' && value.length > 0 && value.length <= maxLength;
+
+const hexSignatureMatches = (expectedHex, receivedHex) => {
+    if (typeof receivedHex !== 'string' || !/^[a-f\d]{64}$/i.test(receivedHex)) return false;
+    return crypto.timingSafeEqual(Buffer.from(expectedHex, 'hex'), Buffer.from(receivedHex, 'hex'));
+};
+
+const populateOrder = (orderId) => Order.findById(orderId).populate('items.productId', 'name imageUrls');
+
+const sendInvoiceFor = async (order, email) => {
+    try {
+        const sent = await sendOrderInvoice(order, email);
+        if (sent) {
+            await Order.updateOne({ _id: order._id }, { $set: { invoiceEmailSent: true } });
+            order.invoiceEmailSent = true;
+        }
+        return sent;
+    } catch (emailError) {
+        console.error('Order e-bill email failed:', emailError.message || 'Email generation failed');
+        return false;
+    }
+};
+
+// Refunds a captured payment whose order could not be created (e.g. stock ran out while the
+// customer was paying). The atomic pending -> refund_pending claim makes sure only one caller
+// (the /verify request or the webhook) ever issues the refund.
+const refundIntent = async (intentId, paymentId, reason) => {
+    const claimed = await PaymentIntent.findOneAndUpdate(
+        { _id: intentId, status: 'pending' },
+        { $set: { status: 'refund_pending', paymentId, failureReason: reason } },
+        { new: true },
+    );
+    if (!claimed) return PaymentIntent.findById(intentId);
+
+    try {
+        const refund = await getRazorpay().payments.refund(paymentId, {
+            amount: claimed.amountPaise,
+            speed: 'normal',
+            notes: { reason, checkout: String(claimed._id) },
+        });
+        claimed.status = 'refunded';
+        claimed.refundId = refund.id;
+    } catch (refundError) {
+        // Needs manual action in the Razorpay dashboard; the intent keeps the paymentId.
+        console.error(
+            'AUTOMATIC REFUND FAILED - refund manually. Payment:', paymentId,
+            refundError?.error?.description || refundError.message,
+        );
+        claimed.status = 'refund_failed';
+    }
+    await claimed.save();
+    return claimed;
+};
+
+// Turns a captured payment into an order exactly once. Safe to run concurrently from
+// /verify and the webhook: the transaction only proceeds while the intent is still
+// 'pending', and Order.paymentId is unique, so the slower caller gets the existing order.
+// Returns { order, created, intent }.
+const fulfillPayment = async (intentId, paymentId) => {
+    const session = await mongoose.startSession();
+    let created = false;
+    let outOfStock = false;
+    try {
+        await session.withTransaction(async () => {
+            created = false;
+            const intent = await PaymentIntent.findOne({ _id: intentId, status: 'pending' }).session(session);
+            if (!intent) return; // already handled by another request
+
+            for (const item of intent.items) {
+                const updatedProduct = await Product.findOneAndUpdate(
+                    { _id: item.productId, stock: { $gte: item.qty } },
+                    { $inc: { stock: -item.qty } },
+                    { new: true, session },
+                );
+                if (!updatedProduct) throw new Error('INSUFFICIENT_STOCK');
+            }
+
+            const [order] = await Order.create([{
+                user: intent.user,
+                items: intent.items,
+                totalAmount: intent.amountPaise / 100,
+                address: intent.address,
+                paymentId,
+            }], { session });
+
+            intent.status = 'completed';
+            intent.paymentId = paymentId;
+            intent.order = order._id;
+            await intent.save({ session });
+            created = true;
+        });
+    } catch (error) {
+        if (error.message === 'INSUFFICIENT_STOCK') outOfStock = true;
+        else if (error.code !== 11000) throw error; // 11000: the other caller won the race
+    } finally {
+        await session.endSession();
+    }
+
+    if (outOfStock) {
+        const intent = await refundIntent(intentId, paymentId, 'Out of stock after payment');
+        return { order: null, created: false, intent };
+    }
+
+    const intent = await PaymentIntent.findById(intentId);
+    const order = intent?.order ? await populateOrder(intent.order) : null;
+    return { order, created, intent };
+};
+
+const refundResponse = (res, intent) => {
+    if (intent.status === 'refund_failed') {
+        return res.status(409).json({
+            message: `An item sold out while your payment was processing. We could not refund it automatically, so our team will refund payment ${intent.paymentId} manually. Please do not pay again.`,
+            refunded: false,
+        });
+    }
+    return res.status(409).json({
+        message: 'An item sold out while your payment was processing. Your payment has been refunded automatically and should reach your account in 5–7 working days.',
+        refunded: true,
+    });
+};
+
 const verifyPayment = async (req, res) => {
     const { razorpay_order_id: razorpayOrderId, razorpay_payment_id: paymentId, razorpay_signature: signature } = req.body;
-    if (!razorpayOrderId || !paymentId || typeof signature !== 'string' || !/^[a-f\d]{64}$/i.test(signature)) {
+    if (!isShortString(razorpayOrderId) || !isShortString(paymentId) || typeof signature !== 'string') {
         return res.status(400).json({ message: 'Payment verification data is incomplete' });
     }
 
@@ -129,14 +252,11 @@ const verifyPayment = async (req, res) => {
             .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
             .update(`${razorpayOrderId}|${paymentId}`)
             .digest('hex');
-        const expectedBuffer = Buffer.from(expectedSignature, 'hex');
-        const receivedBuffer = Buffer.from(signature, 'hex');
-        if (!crypto.timingSafeEqual(expectedBuffer, receivedBuffer)) {
+        if (!hexSignatureMatches(expectedSignature, signature)) {
             return res.status(400).json({ message: 'Payment verification failed' });
         }
 
-        const razorpay = getRazorpay();
-        const payment = await razorpay.payments.fetch(paymentId);
+        const payment = await getRazorpay().payments.fetch(paymentId);
         if (
             payment.order_id !== razorpayOrderId ||
             Number(payment.amount) !== intent.amountPaise ||
@@ -146,82 +266,82 @@ const verifyPayment = async (req, res) => {
             return res.status(400).json({ message: 'Payment has not been captured for this checkout' });
         }
 
-        if (intent.status === 'completed') {
-            if (intent.paymentId !== paymentId) {
-                return res.status(409).json({ message: 'This checkout has already been completed' });
-            }
-            const existingOrder = await Order.findById(intent.order).populate('items.productId', 'name imageUrls');
-            return res.json({ message: 'Payment already verified', order: existingOrder });
+        if (intent.paymentId && intent.paymentId !== paymentId) {
+            return res.status(409).json({ message: 'This checkout has already been completed' });
         }
 
-        const session = await mongoose.startSession();
-        let order;
-        try {
-            await session.withTransaction(async () => {
-                const currentIntent = await PaymentIntent.findOne({
-                    _id: intent._id,
-                    user: req.user._id,
-                    status: 'pending',
-                }).session(session);
-                if (!currentIntent) {
-                    throw new Error('CHECKOUT_ALREADY_PROCESSED');
-                }
-
-                for (const item of currentIntent.items) {
-                    const updatedProduct = await Product.findOneAndUpdate(
-                        { _id: item.productId, stock: { $gte: item.qty } },
-                        { $inc: { stock: -item.qty } },
-                        { new: true, session },
-                    );
-                    if (!updatedProduct) {
-                        throw new Error('INSUFFICIENT_STOCK');
-                    }
-                }
-
-                [order] = await Order.create([{
-                    user: req.user._id,
-                    items: currentIntent.items,
-                    totalAmount: currentIntent.amountPaise / 100,
-                    address: currentIntent.address,
-                    paymentId,
-                }], { session });
-
-                currentIntent.status = 'completed';
-                currentIntent.paymentId = paymentId;
-                currentIntent.order = order._id;
-                await currentIntent.save({ session });
+        const result = await fulfillPayment(intent._id, paymentId);
+        if (result.order) {
+            const invoiceEmailSent = result.created
+                ? await sendInvoiceFor(result.order, req.user.email)
+                : Boolean(result.order.invoiceEmailSent);
+            return res.status(result.created ? 201 : 200).json({
+                message: result.created ? 'Payment verified and order created' : 'Payment already verified',
+                invoiceEmailSent,
+                order: result.order,
             });
-        } finally {
-            await session.endSession();
         }
-
-        order = await Order.findById(order._id).populate('items.productId', 'name imageUrls');
-        let invoiceEmailSent = false;
-        try {
-            invoiceEmailSent = await sendOrderInvoice(order, req.user.email);
-            if (invoiceEmailSent) {
-                await Order.updateOne({ _id: order._id }, { $set: { invoiceEmailSent: true } });
-                order.invoiceEmailSent = true;
-            }
-        } catch (emailError) {
-            console.error('Order e-bill email failed:', emailError.message || 'Email generation failed');
+        if (result.intent && result.intent.status !== 'pending') {
+            return refundResponse(res, result.intent);
         }
-
-        return res.status(201).json({
-            message: 'Payment verified and order created',
-            invoiceEmailSent,
-            order,
-        });
+        return res.status(500).json({ message: 'Unable to verify payment and create the order' });
     } catch (error) {
-        console.error('Verify payment error:', Number(error?.statusCode) || 'unknown', error?.error?.code || 'provider error');
-        if (error.message === 'INSUFFICIENT_STOCK') {
-            return res.status(409).json({ message: 'Stock changed while payment was processing. Please contact support.' });
-        }
-        if (error.message === 'CHECKOUT_ALREADY_PROCESSED') {
-            return res.status(409).json({ message: 'This checkout has already been processed' });
-        }
+        console.error('Verify payment error:', Number(error?.statusCode) || 'unknown', error?.error?.code || error.message || 'provider error');
         return res.status(500).json({ message: 'Unable to verify payment and create the order' });
     }
 };
 
-module.exports = { createdOrder, verifyPayment };
+// Server-to-server backup for /verify: if the customer closes the tab or loses network
+// right after paying, Razorpay still tells us and the order is created here.
+// Configure in Razorpay Dashboard -> Webhooks with the "payment.captured" event.
+const razorpayWebhook = async (req, res) => {
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret || !process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+        console.error('Razorpay webhook received but RAZORPAY_WEBHOOK_SECRET / API keys are not configured');
+        return res.status(503).json({ message: 'Webhook not configured' });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ message: 'Invalid webhook body' });
+    }
+
+    const expectedSignature = crypto.createHmac('sha256', webhookSecret).update(req.body).digest('hex');
+    if (!hexSignatureMatches(expectedSignature, req.get('x-razorpay-signature'))) {
+        return res.status(400).json({ message: 'Invalid webhook signature' });
+    }
+
+    let event;
+    try {
+        event = JSON.parse(req.body.toString('utf8'));
+    } catch {
+        return res.status(400).json({ message: 'Invalid webhook body' });
+    }
+
+    if (event?.event !== 'payment.captured') return res.json({ status: 'ignored' });
+    const payment = event.payload?.payment?.entity;
+    if (!payment || !isShortString(payment.id) || !isShortString(payment.order_id)) {
+        return res.json({ status: 'ignored' });
+    }
+
+    try {
+        const intent = await PaymentIntent.findOne({ razorpayOrderId: payment.order_id });
+        if (!intent) return res.json({ status: 'ignored' }); // not a checkout from this store
+        if (Number(payment.amount) !== intent.amountPaise || payment.currency !== 'INR') {
+            console.error('Webhook amount mismatch for Razorpay order', payment.order_id);
+            return res.json({ status: 'ignored' });
+        }
+        if (intent.status !== 'pending') return res.json({ status: 'already_processed' });
+
+        const result = await fulfillPayment(intent._id, payment.id);
+        if (result.created) {
+            const customer = await User.findById(intent.user).select('email');
+            if (customer?.email) await sendInvoiceFor(result.order, customer.email);
+        }
+        return res.json({ status: result.order ? 'fulfilled' : result.intent?.status || 'processed' });
+    } catch (error) {
+        // Non-2xx makes Razorpay retry the webhook later.
+        console.error('Razorpay webhook error:', error?.error?.code || error.message || 'unknown');
+        return res.status(500).json({ message: 'Webhook processing failed' });
+    }
+};
+
+module.exports = { createdOrder, verifyPayment, razorpayWebhook };
