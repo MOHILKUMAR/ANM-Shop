@@ -2,6 +2,10 @@ import { useContext } from "react";
 import { Link } from "react-router-dom";
 import CartContext from "../context/CartContext.js";
 
+// Display only; the server works out the real shipping and total at checkout.
+const SHIPPING_FEE = 49;
+const FREE_SHIPPING_ABOVE = 499;
+
 function Cart() {
   const { cart, updateQuantity, removeFromCart } = useContext(CartContext);
   const total = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
@@ -46,6 +50,12 @@ function Cart() {
               <span>Subtotal</span>
               <span>{total.toLocaleString("en-IN", { style: "currency", currency: "INR" })}</span>
             </div>
+            <p className="mt-2 text-xs text-gray-500">
+              {total >= FREE_SHIPPING_ABOVE
+                ? "Your order ships free."
+                : `Add ${(FREE_SHIPPING_ABOVE - total).toLocaleString("en-IN", { style: "currency", currency: "INR" })} more for free shipping, or pay ${SHIPPING_FEE.toLocaleString("en-IN", { style: "currency", currency: "INR" })} at checkout.`}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">Apply a coupon at checkout.</p>
             <Link className="mt-6 block rounded-lg bg-brand-700 px-5 py-3 text-center font-semibold text-white hover:bg-brand-800" to="/checkout">Proceed to checkout</Link>
             <Link className="mt-4 block text-center text-sm font-medium text-brand-700 hover:text-brand-900" to="/shop">Continue shopping</Link>
           </aside>
