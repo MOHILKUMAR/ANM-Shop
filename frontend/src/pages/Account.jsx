@@ -2,6 +2,7 @@ import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
+import MyCoupons from "../components/MyCoupons.jsx";
 
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 
@@ -66,6 +67,8 @@ function Account() {
           <div><dt className="text-sm text-gray-500">Email</dt><dd className="mt-1 break-all text-gray-900">{user.email}</dd></div>
         </dl>
       </section>
+
+      <div className="mb-6"><MyCoupons token={user.token} /></div>
 
       <form className="space-y-5 rounded-xl border border-gray-200 bg-white p-6" onSubmit={changePassword}>
         <div>

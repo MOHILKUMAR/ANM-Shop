@@ -4,6 +4,14 @@ import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 
 const formatMoney = (amount) => `INR ${Number(amount || 0).toFixed(2)}`;
+const inr = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+
+// Subtotal, shipping and discount for orders that have them; empty for older orders.
+const breakdownLines = (order) => (order.subtotalAmount === undefined || order.subtotalAmount === null ? [] : [
+  ["Subtotal", formatMoney(order.subtotalAmount)],
+  ["Shipping", order.shippingFee ? formatMoney(order.shippingFee) : "Free"],
+  ...(order.discountAmount ? [[`Discount${order.couponCode ? ` (${order.couponCode})` : ""}`, `-${formatMoney(order.discountAmount)}`]] : []),
+]);
 
 async function downloadBill(order) {
   const { jsPDF } = await import("jspdf");
@@ -99,6 +107,15 @@ async function downloadBill(order) {
     y = 24;
   }
   y += 8;
+  // Orders placed before shipping and coupons existed only have a total.
+  for (const [label, value] of breakdownLines(order)) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(113, 100, 108);
+    pdf.text(label, columns.unit, y, { align: "right" });
+    pdf.text(value, columns.total, y, { align: "right" });
+    y += 6;
+  }
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(13);
   pdf.setTextColor(87, 52, 67);
@@ -202,9 +219,20 @@ function OrderHistory() {
                   </li>
                 ))}
               </ul>
-              <div className="flex justify-between border-t border-gray-100 pt-4 font-semibold text-gray-900">
-                <span>Total paid</span>
-                <span>{Number(order.totalAmount).toLocaleString("en-IN", { style: "currency", currency: "INR" })}</span>
+              <div className="border-t border-gray-100 pt-4">
+                {order.subtotalAmount !== undefined && order.subtotalAmount !== null && (
+                  <dl className="mb-2 space-y-1 text-sm">
+                    <div className="flex justify-between"><dt className="text-gray-600">Subtotal</dt><dd className="text-gray-900">{inr(order.subtotalAmount)}</dd></div>
+                    <div className="flex justify-between"><dt className="text-gray-600">Shipping</dt><dd className="text-gray-900">{order.shippingFee ? inr(order.shippingFee) : "Free"}</dd></div>
+                    {order.discountAmount > 0 && (
+                      <div className="flex justify-between text-green-700"><dt>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</dt><dd>−{inr(order.discountAmount)}</dd></div>
+                    )}
+                  </dl>
+                )}
+                <div className="flex justify-between font-semibold text-gray-900">
+                  <span>Total paid</span>
+                  <span>{inr(order.totalAmount)}</span>
+                </div>
               </div>
               <p className="mt-3 text-sm text-gray-500">Delivering to {order.address?.city}, {order.address?.country}{order.address?.phone ? ` | ${order.address.phone}` : ""}</p>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
