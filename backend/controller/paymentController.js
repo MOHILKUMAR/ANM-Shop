@@ -5,8 +5,10 @@ const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
 const Product = require('../model/Product');
 const User = require('../model/User');
+const Coupon = require('../model/Coupon');
+const CouponUsage = require('../model/CouponUsage');
 const sendOrderInvoice = require('../utils/sendOrderInvoice');
-const beautyCategories = require('../constants/beautyCategories');
+const { PricingError, priceCart, quoteForClient, describePaymentMethods } = require('../utils/pricing');
 
 const getRazorpay = () => new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -19,68 +21,43 @@ const isValidAddress = (address) => address &&
         typeof address[field] === 'string' && address[field].trim().length > 0 && address[field].trim().length <= maxLength,
     ) && /^\+?[1-9]\d{7,14}$/.test(address.phone.replace(/[\s()-]/g, ''));
 
+// Prices the cart (and an optional coupon) for the checkout page. The same calculation runs
+// again when the payment is created, so the total shown is the total charged.
+const quoteOrder = async (req, res) => {
+    try {
+        const priced = await priceCart({ user: req.user, items: req.body.items, couponCode: req.body.couponCode });
+        return res.json(quoteForClient(priced));
+    } catch (error) {
+        if (error instanceof PricingError) return res.status(error.statusCode).json({ message: error.message });
+        console.error('Quote error:', error.message);
+        return res.status(500).json({ message: 'Unable to price your cart' });
+    }
+};
+
 const createdOrder = async (req, res) => {
     try {
         if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
             return res.status(503).json({ message: 'Razorpay is not configured on the server' });
         }
 
-        const { items, address } = req.body;
-        if (!Array.isArray(items) || items.length === 0 || items.length > 50 || !isValidAddress(address)) {
-            return res.status(400).json({ message: 'Items and a complete shipping address are required' });
+        const { items, address, couponCode } = req.body;
+        if (!isValidAddress(address)) {
+            return res.status(400).json({ message: 'A complete shipping address is required' });
         }
 
-        const quantities = new Map();
-        for (const item of items) {
-            if (typeof item.productId !== 'string' || !mongoose.isValidObjectId(item.productId)) {
-                return res.status(400).json({ message: 'Invalid product in cart' });
-            }
-            const productId = item.productId.toLowerCase();
-            const qty = Number(item.qty);
-            if (!Number.isInteger(qty) || qty < 1 || qty > 99) {
-                return res.status(400).json({ message: 'Item quantities must be between 1 and 99' });
-            }
-            const combinedQty = (quantities.get(productId) || 0) + qty;
-            if (combinedQty > 99) {
-                return res.status(400).json({ message: 'A product quantity cannot exceed 99' });
-            }
-            quantities.set(productId, combinedQty);
-        }
-
-        const productIds = [...quantities.keys()];
-        const products = await Product.find({
-            _id: { $in: productIds },
-            category: { $in: beautyCategories },
-        });
-        if (products.length !== productIds.length) {
-            return res.status(400).json({ message: 'One or more products are no longer available' });
-        }
-
-        const orderItems = [];
-        let amountPaise = 0;
-        for (const product of products) {
-            const qty = quantities.get(product._id.toString());
-            if (qty > product.stock) {
-                return res.status(409).json({ message: `${product.name} does not have enough stock` });
-            }
-            const unitPricePaise = Math.round(Number(product.price) * 100);
-            amountPaise += unitPricePaise * qty;
-            orderItems.push({ productId: product._id, qty, price: unitPricePaise / 100 });
-        }
-
-        if (!Number.isSafeInteger(amountPaise) || amountPaise < 1) {
-            return res.status(400).json({ message: 'The order total is invalid' });
-        }
+        const priced = await priceCart({ user: req.user, items, couponCode });
+        // Never charge a different amount than the customer was shown.
+        if (priced.couponError) return res.status(400).json({ message: priced.couponError, couponError: true });
 
         const razorpayOrder = await getRazorpay().orders.create({
-            amount: amountPaise,
+            amount: priced.totalPaise,
             currency: 'INR',
             receipt: crypto.randomBytes(12).toString('hex'),
         });
 
         await PaymentIntent.create({
             user: req.user._id,
-            items: orderItems,
+            items: priced.lines.map((line) => ({ productId: line.productId, qty: line.qty, price: line.unitPaise / 100 })),
             address: {
                 ...Object.fromEntries(
                     ['fullName', 'street', 'city', 'postalCode', 'country']
@@ -89,7 +66,14 @@ const createdOrder = async (req, res) => {
                 phone: address.phone.replace(/[\s()-]/g, ''),
             },
             razorpayOrderId: razorpayOrder.id,
-            amountPaise,
+            amountPaise: priced.totalPaise,
+            subtotalPaise: priced.subtotalPaise,
+            shippingPaise: priced.shippingPaise,
+            discountPaise: priced.savingsPaise,
+            ...(priced.coupon ? {
+                coupon: { id: priced.coupon._id, code: priced.coupon.code },
+                allowedPaymentMethods: priced.coupon.paymentMethods || [],
+            } : {}),
         });
 
         return res.status(201).json({
@@ -97,10 +81,13 @@ const createdOrder = async (req, res) => {
             amount: razorpayOrder.amount,
             currency: razorpayOrder.currency,
             keyId: process.env.RAZORPAY_KEY_ID,
+            // The checkout window only offers these methods when the coupon requires them.
+            allowedPaymentMethods: priced.coupon?.paymentMethods || [],
         });
     } catch (error) {
+        if (error instanceof PricingError) return res.status(error.statusCode).json({ message: error.message });
         const statusCode = Number(error?.statusCode);
-        console.error('Create payment order error:', statusCode || 'unknown', error?.error?.code || 'provider error');
+        console.error('Create payment order error:', statusCode || 'unknown', error?.error?.code || error.message || 'provider error');
         if (statusCode === 401) {
             return res.status(502).json({
                 message: 'Razorpay rejected the configured API keys. Set a matching active test key ID and secret in backend/.env.',
@@ -165,19 +152,66 @@ const refundIntent = async (intentId, paymentId, reason) => {
     return claimed;
 };
 
+// Why an order couldn't be created after payment; the message is shown to the customer and
+// stored on the payment record for the admin.
+class FulfillmentRefusal extends Error {}
+
+// Coupon rules that can only be settled once the payment exists: the payment method, the total
+// usage limit, and the per-customer limit. Runs inside the order transaction, so limits are
+// never exceeded even when several customers pay at the same moment.
+const redeemCoupon = async (intent, paymentMethod, session) => {
+    if (!intent.coupon?.id) return;
+    const { code } = intent.coupon;
+    const allowed = intent.allowedPaymentMethods || [];
+    if (allowed.length && !allowed.includes(paymentMethod)) {
+        throw new FulfillmentRefusal(`Coupon ${code} only works with ${describePaymentMethods(allowed)} payments, but this payment was made by ${describePaymentMethods([paymentMethod || 'another method'])}.`);
+    }
+
+    const coupon = await Coupon.findById(intent.coupon.id).session(session);
+    if (!coupon) return; // deleted by an admin after checkout started; honour the price shown
+    const counted = await Coupon.findOneAndUpdate(
+        { _id: coupon._id, $or: [{ usageLimit: null }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }] },
+        { $inc: { usedCount: 1 } },
+        { returnDocument: 'after', session },
+    );
+    if (!counted) throw new FulfillmentRefusal(`Coupon ${code} ran out of uses while your payment was processing.`);
+
+    const usage = await CouponUsage.findOneAndUpdate(
+        { coupon: coupon._id, user: intent.user, ...(coupon.perUserLimit ? { count: { $lt: coupon.perUserLimit } } : {}) },
+        { $inc: { count: 1 } },
+        { returnDocument: 'after', session },
+    );
+    if (!usage) throw new FulfillmentRefusal(`You had already used coupon ${code} the maximum number of times.`);
+};
+
 // Turns a captured payment into an order exactly once. Safe to run concurrently from
 // /verify and the webhook: the transaction only proceeds while the intent is still
 // 'pending', and Order.paymentId is unique, so the slower caller gets the existing order.
 // Returns { order, created, intent }.
-const fulfillPayment = async (intentId, paymentId) => {
+const fulfillPayment = async (intentId, paymentId, paymentMethod) => {
+    // The per-customer usage counter must exist before the transaction starts: a transaction
+    // reads from a snapshot and would not see a counter created part-way through it.
+    const pending = await PaymentIntent.findOne({ _id: intentId, status: 'pending' }).select('coupon user').lean();
+    if (pending?.coupon?.id) {
+        await CouponUsage.updateOne(
+            { coupon: pending.coupon.id, user: pending.user },
+            { $setOnInsert: { count: 0 } },
+            { upsert: true },
+        ).catch((error) => {
+            if (error.code !== 11000) throw error; // created by a concurrent checkout
+        });
+    }
+
     const session = await mongoose.startSession();
     let created = false;
-    let outOfStock = false;
+    let refusal = null;
     try {
         await session.withTransaction(async () => {
             created = false;
             const intent = await PaymentIntent.findOne({ _id: intentId, status: 'pending' }).session(session);
             if (!intent) return; // already handled by another request
+
+            await redeemCoupon(intent, paymentMethod, session);
 
             for (const item of intent.items) {
                 const updatedProduct = await Product.findOneAndUpdate(
@@ -185,13 +219,20 @@ const fulfillPayment = async (intentId, paymentId) => {
                     { $inc: { stock: -item.qty } },
                     { returnDocument: 'after', session },
                 );
-                if (!updatedProduct) throw new Error('INSUFFICIENT_STOCK');
+                if (!updatedProduct) throw new FulfillmentRefusal('An item sold out while your payment was processing.');
             }
 
             const [order] = await Order.create([{
                 user: intent.user,
                 items: intent.items,
                 totalAmount: intent.amountPaise / 100,
+                ...(intent.subtotalPaise !== undefined ? {
+                    subtotalAmount: intent.subtotalPaise / 100,
+                    shippingFee: intent.shippingPaise / 100,
+                    discountAmount: intent.discountPaise / 100,
+                } : {}),
+                couponCode: intent.coupon?.code,
+                paymentMethod,
                 address: intent.address,
                 paymentId,
             }], { session });
@@ -203,14 +244,15 @@ const fulfillPayment = async (intentId, paymentId) => {
             created = true;
         });
     } catch (error) {
-        if (error.message === 'INSUFFICIENT_STOCK') outOfStock = true;
-        else if (error.code !== 11000) throw error; // 11000: the other caller won the race
+        if (error instanceof FulfillmentRefusal) refusal = error.message;
+        // A duplicate paymentId means /verify and the webhook raced and the other one won.
+        else if (!(error.code === 11000 && error.keyPattern?.paymentId)) throw error;
     } finally {
         await session.endSession();
     }
 
-    if (outOfStock) {
-        const intent = await refundIntent(intentId, paymentId, 'Out of stock after payment');
+    if (refusal) {
+        const intent = await refundIntent(intentId, paymentId, refusal);
         return { order: null, created: false, intent };
     }
 
@@ -220,14 +262,15 @@ const fulfillPayment = async (intentId, paymentId) => {
 };
 
 const refundResponse = (res, intent) => {
+    const reason = intent.failureReason || 'Your order could not be completed.';
     if (intent.status === 'refund_failed') {
         return res.status(409).json({
-            message: `An item sold out while your payment was processing. We could not refund it automatically, so our team will refund payment ${intent.paymentId} manually. Please do not pay again.`,
+            message: `${reason} We could not refund it automatically, so our team will refund payment ${intent.paymentId} manually. Please do not pay again.`,
             refunded: false,
         });
     }
     return res.status(409).json({
-        message: 'An item sold out while your payment was processing. Your payment has been refunded automatically and should reach your account in 5–7 working days.',
+        message: `${reason} Your payment has been refunded automatically and should reach your account in 5–7 working days.`,
         refunded: true,
     });
 };
@@ -294,7 +337,7 @@ const verifyPayment = async (req, res) => {
             return res.status(400).json({ message: 'Payment has not been captured for this checkout' });
         }
 
-        const result = await fulfillPayment(intent._id, paymentId);
+        const result = await fulfillPayment(intent._id, paymentId, payment.method);
         if (result.order) {
             const invoiceEmailSent = result.created
                 ? await sendInvoiceFor(result.order, req.user.email)
@@ -359,7 +402,7 @@ const razorpayWebhook = async (req, res) => {
         }
         if (intent.status !== 'pending') return res.json({ status: 'already_processed' });
 
-        const result = await fulfillPayment(intent._id, payment.id);
+        const result = await fulfillPayment(intent._id, payment.id, payment.method);
         if (result.created) {
             const customer = await User.findById(intent.user).select('email');
             if (customer?.email) await sendInvoiceFor(result.order, customer.email);
@@ -399,4 +442,4 @@ const deletePaymentRecord = async (req, res) => {
     }
 };
 
-module.exports = { createdOrder, verifyPayment, razorpayWebhook, deletePaymentRecord };
+module.exports = { quoteOrder, createdOrder, verifyPayment, razorpayWebhook, deletePaymentRecord };

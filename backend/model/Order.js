@@ -12,6 +12,13 @@ const orderSchema = new mongoose.Schema(
             }
         ],
         totalAmount : {type: Number, required: true},
+        // Breakdown of totalAmount (the amount paid): items + shipping - discount. Older orders
+        // only have totalAmount.
+        subtotalAmount : { type: Number },
+        shippingFee : { type: Number, default: 0 },
+        discountAmount : { type: Number, default: 0 },
+        couponCode : { type: String },
+        paymentMethod : { type: String },
         address : {
             fullName: {type: String , required : true},
             street : { type: String , required : true},

@@ -20,6 +20,15 @@ const paymentIntentSchema = new mongoose.Schema(
     },
     razorpayOrderId: { type: String, required: true, unique: true },
     amountPaise: { type: Number, required: true, min: 1 },
+    subtotalPaise: { type: Number, min: 0 },
+    shippingPaise: { type: Number, min: 0, default: 0 },
+    discountPaise: { type: Number, min: 0, default: 0 },
+    coupon: {
+      id: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },
+      code: { type: String },
+    },
+    // Set when the coupon only works with certain Razorpay payment methods.
+    allowedPaymentMethods: [{ type: String }],
     paymentId: { type: String },
     order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
     status: {
@@ -28,7 +37,7 @@ const paymentIntentSchema = new mongoose.Schema(
       default: 'pending',
     },
     refundId: { type: String },
-    failureReason: { type: String, maxlength: 200 },
+    failureReason: { type: String, maxlength: 300 },
   },
   { timestamps: true },
 );

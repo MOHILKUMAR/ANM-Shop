@@ -74,6 +74,7 @@ app.use('/api/analytics', require('./routes/analyticRoutes'));
 app.use('/api/admin/search', require('./routes/searchRoutes'));
 app.use('/api/tickets', require('./routes/ticketRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
+app.use('/api/coupons', require('./routes/couponRoutes'));
 
 app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);

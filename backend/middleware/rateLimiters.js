@@ -25,7 +25,9 @@ const perUser = { keyGenerator: (req) => `user:${req.user._id}` };
 const chatLimiter = createLimiter(30, 'You are sending messages too quickly. Wait a few minutes and try again.', perUser);
 const ticketLimiter = createLimiter(5, 'Too many new tickets. Try again later.', { ...perUser, windowMs: 60 * 60 * 1000 });
 const ticketReplyLimiter = createLimiter(30, 'Too many replies. Try again later.', perUser);
+// Checkout re-prices the cart on every change and coupon attempt; this also slows code guessing.
+const quoteLimiter = createLimiter(120, 'Too many price checks. Wait a few minutes and try again.', perUser);
 
 module.exports = {
-    authLimiter, otpLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter,
+    authLimiter, otpLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter, quoteLimiter,
 };
