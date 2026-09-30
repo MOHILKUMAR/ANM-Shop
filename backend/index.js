@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
+const { migrateEmbeddedReviews } = require('./utils/reviews');
 
 dotenv.config();
 
@@ -75,6 +76,7 @@ app.use('/api/admin/search', require('./routes/searchRoutes'));
 app.use('/api/tickets', require('./routes/ticketRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/coupons', require('./routes/couponRoutes'));
+app.use('/api/reviews', require('./routes/reviewRoutes'));
 
 app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
@@ -99,6 +101,8 @@ app.use((error, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const startServer = async () => {
     await connectDB();
+    // A failed move is retried on the next start; it must not keep the shop offline.
+    await migrateEmbeddedReviews().catch((error) => console.error('Review migration failed:', error.message));
     app.listen(PORT, () => {
         console.log(`Server running ${PORT}`);
     });

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Product = require('../model/Product');
+const Review = require('../model/Review');
 const cloudinary = require('../config/cloudinary');
 const beautyCategories = require('../constants/beautyCategories');
 const beautyCategorySet = new Set(beautyCategories);
@@ -118,55 +119,6 @@ const getProductById = async (req, res) => {
     }
 };
 
-const createProductReview = async (req, res) => {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-        return res.status(400).json({ message: 'Invalid product ID' });
-    }
-
-    const rating = Number(req.body.rating);
-    const sentiment = typeof req.body.sentiment === 'string'
-        ? req.body.sentiment.trim().toLowerCase()
-        : '';
-
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-        return res.status(400).json({ message: 'Choose a rating from 1 to 5' });
-    }
-    if (!['good', 'average', 'bad'].includes(sentiment)) {
-        return res.status(400).json({ message: 'Choose Good, Average, or Bad' });
-    }
-
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product || !beautyCategorySet.has(product.category)) {
-            return res.status(404).json({ message: 'Beauty product not found' });
-        }
-
-        const existingReview = product.reviews.find((review) => review.user.equals(req.user._id));
-        if (existingReview) {
-            existingReview.rating = rating;
-            existingReview.sentiment = sentiment;
-            existingReview.name = req.user.name;
-        } else {
-            product.reviews.push({
-                user: req.user._id,
-                name: req.user.name,
-                rating,
-                sentiment,
-            });
-        }
-
-        product.numReviews = product.reviews.length;
-        product.rating = product.numReviews
-            ? Number((product.reviews.reduce((total, review) => total + review.rating, 0) / product.numReviews).toFixed(1))
-            : 0;
-        await product.save();
-        return res.status(existingReview ? 200 : 201).json(product);
-    } catch (error) {
-        console.error('Create product review error:', error.message);
-        return res.status(500).json({ message: 'Unable to save your review' });
-    }
-};
-
 const getAdminProducts = async (req, res) => {
     const page = Number.parseInt(req.query.page, 10) || 1;
     const requestedLimit = Number.parseInt(req.query.limit, 10) || PAGE_SIZE_DEFAULT;
@@ -236,6 +188,7 @@ const deleteProduct = async (req, res) => {
     try {
         const product = await Product.findByIdAndDelete(req.params.id);
         if (!product) return res.status(404).json({ message: 'Product not found' });
+        await Review.deleteMany({ product: product._id });
         return res.json({ message: 'Product removed' });
     } catch (error) {
         console.error('Delete product error:', error.message);
@@ -243,4 +196,4 @@ const deleteProduct = async (req, res) => {
     }
 };
 
-module.exports = { deleteProduct, getProducts, getAdminProducts, getProductById, createProductReview, updateProduct, createProduct };
+module.exports = { deleteProduct, getProducts, getAdminProducts, getProductById, updateProduct, createProduct };
