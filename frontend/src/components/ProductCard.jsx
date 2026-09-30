@@ -1,10 +1,12 @@
 import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import CartContext from "../context/CartContext.js";
+import { overallRating, reviewCountLabel } from "../data/reviews.js";
 
 function ProductCard({ product }) {
   const { addToCart } = useContext(CartContext);
   const [added, setAdded] = useState(false);
+  const overall = product.numReviews > 0 ? overallRating(product.ratingCounts) : null;
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -16,6 +18,9 @@ function ProductCard({ product }) {
         <Link className="mt-2 text-lg font-semibold text-gray-900 hover:text-brand-700" to={`/product/${product._id}`}>
           {product.name}
         </Link>
+        {overall && (
+          <p className="mt-1 text-xs font-medium text-amber-700">{overall.label} · {reviewCountLabel(product.numReviews)}</p>
+        )}
         <p className="mt-2 line-clamp-2 flex-1 text-sm text-gray-600">{product.description}</p>
         <div className="mt-5 flex items-center justify-between gap-3">
           <span className="font-bold text-gray-900">

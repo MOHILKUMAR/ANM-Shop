@@ -6,6 +6,7 @@ import AdminSearch from "../components/AdminSearch.jsx";
 import AdminUsers from "../components/AdminUsers.jsx";
 import AdminTickets from "../components/AdminTickets.jsx";
 import AdminCoupons from "../components/AdminCoupons.jsx";
+import AdminReviews from "../components/AdminReviews.jsx";
 import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
 import { beautyCategories } from "../data/beautyCategories.js";
 
@@ -258,8 +259,8 @@ function AdminDashboard() {
         </section>
       )}
 
-      <div className="mb-6 flex gap-3 border-b border-gray-200">
-        {["products", "orders", "coupons", "tickets", "users", "search"].map((item) => (
+      <div className="mb-6 flex gap-3 overflow-x-auto border-b border-gray-200">
+        {["products", "orders", "coupons", "reviews", "tickets", "users", "search"].map((item) => (
           <button className={`border-b-2 px-4 py-3 font-semibold capitalize ${tab === item ? "border-brand-600 text-brand-800" : "border-transparent text-gray-500"}`} key={item} type="button" onClick={() => setTab(item)}>{item}</button>
         ))}
       </div>
@@ -325,6 +326,8 @@ function AdminDashboard() {
         <AdminTickets token={user.token} />
       ) : tab === "coupons" ? (
         <AdminCoupons token={user.token} />
+      ) : tab === "reviews" ? (
+        <AdminReviews token={user.token} />
       ) : (
         <section className="space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Customer orders{loadingData ? "" : ` (${orders.length})`}</h2>

@@ -186,7 +186,7 @@ const toolHandlers = {
             filter.$and = words.map((word) => ({ $or: [{ name: new RegExp(word, 'i') }, { description: new RegExp(word, 'i') }] }));
         }
         const products = await Product.find(filter).sort({ createdAt: -1 }).limit(8)
-            .select('name price stock category description rating numReviews').lean();
+            .select('name price stock category description numReviews ratingCounts').lean();
         return {
             products: products.map((product) => ({
                 product_id: String(product._id),
@@ -194,7 +194,9 @@ const toolHandlers = {
                 category: product.category,
                 price_inr: product.price,
                 in_stock: product.stock,
-                rating: product.numReviews ? `${product.rating}/5 from ${product.numReviews} reviews` : 'no reviews yet',
+                reviews: product.numReviews
+                    ? `${product.numReviews} reviews: ${product.ratingCounts?.excellent || 0} excellent, ${product.ratingCounts?.good || 0} good, ${product.ratingCounts?.bad || 0} bad`
+                    : 'no reviews yet',
                 description: product.description.slice(0, 200),
             })),
         };

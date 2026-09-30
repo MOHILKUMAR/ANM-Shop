@@ -1,31 +1,5 @@
 const mongoose = require('mongoose');
 
-const reviewSchema = new mongoose.Schema({
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-    },
-    name: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: 100,
-    },
-    rating: {
-        type: Number,
-        required: true,
-        min: 1,
-        max: 5,
-        validate: Number.isInteger,
-    },
-    sentiment: {
-        type: String,
-        required: true,
-        enum: ['good', 'average', 'bad'],
-    },
-}, { timestamps: true });
-
 const productSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -64,9 +38,13 @@ const productSchema = new mongoose.Schema({
         maxlength: 2048,
     },
     createdAt : {type: Date, default: Date.now},
-    rating: {type: Number, default:0},
+    // Counts of visible reviews (model/Review.js), kept up to date by utils/reviews.js.
     numReviews : {type: Number, default : 0},
-    reviews: [reviewSchema],
+    ratingCounts: {
+        bad: { type: Number, default: 0 },
+        good: { type: Number, default: 0 },
+        excellent: { type: Number, default: 0 },
+    },
 
 });
 

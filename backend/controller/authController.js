@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../model/User');
 const Order = require('../model/Order');
 const ChatConversation = require('../model/ChatConversation');
+const Review = require('../model/Review');
+const { refreshProductRating } = require('../utils/reviews');
 const sendEmail = require('../utils/sendEmail');
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -358,7 +360,11 @@ const deleteUser = async (req, res) => {
         await user.deleteOne();
         // Chat history is personal; tickets stay with the orders and payments as records.
         await ChatConversation.deleteOne({ user: user._id });
-        return res.json({ message: 'Account deleted. Their orders, payments, and tickets are kept as records.' });
+        // Their reviews go too, and the affected products are recounted.
+        const reviewedProducts = await Review.distinct('product', { user: user._id });
+        await Review.deleteMany({ user: user._id });
+        await Promise.all(reviewedProducts.map((productId) => refreshProductRating(productId)));
+        return res.json({ message: 'Account deleted with their reviews. Their orders, payments, and tickets are kept as records.' });
     } catch (error) {
         console.error('Delete user error:', error.message);
         return res.status(500).json({ message: 'Unable to delete account' });
