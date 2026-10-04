@@ -163,14 +163,15 @@ function AdminCoupons({ token }) {
     }
   }
 
+  // Changes only the on/off switch; resending the whole form would resend the dates too.
   async function toggleActive(coupon) {
     setError("");
     try {
-      const saved = await apiRequest(`/coupons/${coupon._id}`, {
-        method: "PUT",
+      const saved = await apiRequest(`/coupons/${coupon._id}/active`, {
+        method: "PATCH",
         token,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...toForm(coupon), applicableUserEmails: coupon.applicableUserEmails || [], isActive: !coupon.isActive }),
+        body: JSON.stringify({ isActive: !coupon.isActive }),
       });
       setCoupons((current) => current.map((item) => (item._id === saved._id ? saved : item)));
     } catch (requestError) {

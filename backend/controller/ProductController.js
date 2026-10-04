@@ -93,7 +93,8 @@ const getProducts = async (req, res) => {
         ]);
         return res.json({
             items,
-            categories: categories.sort((left, right) => left.localeCompare(right)),
+            // A sorted copy: sort() works in place and the list is shared with the rest of the app.
+            categories: [...categories].sort((left, right) => left.localeCompare(right)),
             pagination: { page, limit, total, pages: Math.ceil(total / limit) },
         });
     } catch (error) {
@@ -116,6 +117,23 @@ const getProductById = async (req, res) => {
     } catch (error) {
         console.error('Fetch product error:', error.message);
         return res.status(500).json({ message: 'Unable to fetch product' });
+    }
+};
+
+// GET /api/products/lookup?ids=a,b,c — current price and stock for the products in a cart.
+// Products that are missing from `items` are no longer sold.
+const lookupProducts = async (req, res) => {
+    const ids = typeof req.query.ids === 'string' ? [...new Set(req.query.ids.split(',').map((id) => id.trim()).filter(Boolean))] : [];
+    if (!ids.length || ids.length > 50 || ids.some((id) => !mongoose.isValidObjectId(id))) {
+        return res.status(400).json({ message: 'Send up to 50 product IDs' });
+    }
+    try {
+        const items = await Product.find({ _id: { $in: ids }, category: { $in: beautyCategories } })
+            .select('name price stock category imageUrls').lean();
+        return res.json({ items });
+    } catch (error) {
+        console.error('Product lookup error:', error.message);
+        return res.status(500).json({ message: 'Unable to check your cart' });
     }
 };
 
@@ -196,4 +214,4 @@ const deleteProduct = async (req, res) => {
     }
 };
 
-module.exports = { deleteProduct, getProducts, getAdminProducts, getProductById, updateProduct, createProduct };
+module.exports = { deleteProduct, getProducts, getAdminProducts, getProductById, lookupProducts, updateProduct, createProduct };

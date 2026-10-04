@@ -4,7 +4,7 @@ import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import { ListSkeleton } from "../components/Skeletons.jsx";
 import { TicketSummary, TicketThread } from "../components/TicketThread.jsx";
-import { OPEN_CHAT_EVENT, ticketCategories } from "../data/tickets.js";
+import { OPEN_CHAT_EVENT, TICKETS_CHANGED_EVENT, ticketCategories } from "../data/tickets.js";
 
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const emptyForm = { subject: "", category: "order", orderCode: "", description: "" };
@@ -18,6 +18,14 @@ function Support() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // Bumped when the chat assistant opens a ticket, to load the list again.
+  const [ticketsVersion, setTicketsVersion] = useState(0);
+
+  useEffect(() => {
+    const reload = () => setTicketsVersion((version) => version + 1);
+    window.addEventListener(TICKETS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(TICKETS_CHANGED_EVENT, reload);
+  }, []);
 
   useEffect(() => {
     if (!user?.token) return undefined;
@@ -37,7 +45,7 @@ function Support() {
     return () => {
       active = false;
     };
-  }, [user?.token]);
+  }, [user?.token, ticketsVersion]);
 
   if (!user) {
     return (

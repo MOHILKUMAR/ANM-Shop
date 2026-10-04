@@ -19,6 +19,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import ReturnsPolicy from "./pages/ReturnsPolicy";
+import NotFound from "./pages/NotFound";
 
 
 function App() {
@@ -48,6 +49,7 @@ function App() {
             <Route path="/contact" element={<Contact />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/returns" element={<ReturnsPolicy />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
         <Footer />

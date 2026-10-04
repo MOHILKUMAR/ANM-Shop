@@ -1,4 +1,5 @@
-import { useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { apiRequest } from "../api.js";
 import AuthContext from "./AuthContext.js";
 import CartContext from "./CartContext.js";
 
@@ -56,6 +57,40 @@ function loadCart(owner) {
   return cart;
 }
 
+const inr = (amount) => Number(amount).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+const isProductId = (id) => /^[a-f\d]{24}$/i.test(String(id));
+
+// The cart with the shop's current name, price, and stock for each product that was looked up
+// (`fresh` holds the ones still sold). Gone or sold-out products are dropped and quantities
+// are capped at the stock. Items added after the lookup started are left alone.
+function withCurrentDetails(cart, fresh, checked) {
+  return cart.flatMap((item) => {
+    if (!checked.has(item._id)) return [item];
+    const product = fresh.get(item._id);
+    if (!product || product.stock < 1) return [];
+    const { name, price, stock, category, imageUrls } = product;
+    return [{ ...item, name, price, stock, category, imageUrls, quantity: Math.min(item.quantity, stock) }];
+  });
+}
+
+// One sentence per change the customer should know about.
+function describeChanges(cart, fresh, checked) {
+  const notes = [];
+  for (const item of cart) {
+    if (!checked.has(item._id)) continue;
+    const product = fresh.get(item._id);
+    if (!product) {
+      notes.push(`${item.name || "An item"} is no longer sold, so it was removed from your cart.`);
+    } else if (product.stock < 1) {
+      notes.push(`${product.name} is sold out, so it was removed from your cart.`);
+    } else {
+      if (item.quantity > product.stock) notes.push(`Only ${product.stock} of ${product.name} left, so your quantity was lowered.`);
+      if (Number(product.price) !== Number(item.price)) notes.push(`${product.name} now costs ${inr(product.price)} (was ${inr(item.price)}).`);
+    }
+  }
+  return notes;
+}
+
 export function CartProvider({ children }) {
   const { user } = useContext(AuthContext);
   const owner = user?._id ? String(user._id) : GUEST;
@@ -73,6 +108,27 @@ export function CartProvider({ children }) {
     writeCart(storageKey(cartOwner), cart);
   }, [cartOwner, cart]);
 
+  // The latest cart for refreshCart, which must not change identity on every cart edit.
+  const cartRef = useRef(cart);
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
+
+  // The cart keeps the price and stock from when each item was added. This replaces them with
+  // the shop's current ones (the server charges those anyway) and resolves what changed.
+  const refreshCart = useCallback(async () => {
+    const snapshot = cartRef.current;
+    const checked = new Set(snapshot.map((item) => item._id).slice(0, 50));
+    if (!checked.size) return [];
+    const ids = [...checked].filter(isProductId);
+    const { items } = ids.length
+      ? await apiRequest(`/products/lookup?ids=${ids.join(",")}`)
+      : { items: [] };
+    const fresh = new Map(items.map((product) => [String(product._id), product]));
+    setCart((current) => withCurrentDetails(current, fresh, checked));
+    return describeChanges(snapshot, fresh, checked);
+  }, []);
+
   function addToCart(product) {
     if (!product || Number(product.stock) < 1) return;
 
@@ -81,8 +137,9 @@ export function CartProvider({ children }) {
       if (!existingItem) return [...currentCart, { ...product, quantity: 1 }];
 
       return currentCart.map((item) =>
+        // The product being added is the latest copy, so its price and stock replace the saved ones.
         item._id === product._id
-          ? { ...item, quantity: Math.min(item.quantity + 1, Number(item.stock)) }
+          ? { ...item, ...product, quantity: Math.min(item.quantity + 1, Number(product.stock)) }
           : item,
       );
     });
@@ -116,7 +173,7 @@ export function CartProvider({ children }) {
 
   return (
     <CartContext.Provider
-      value={{ cart, itemCount, addToCart, updateQuantity, removeFromCart, clearCart }}
+      value={{ cart, itemCount, addToCart, updateQuantity, removeFromCart, clearCart, refreshCart }}
     >
       {children}
     </CartContext.Provider>

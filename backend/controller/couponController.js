@@ -21,6 +21,11 @@ const optionalNumber = (value, name, { min, max, integer = false }) => {
 };
 const optionalDate = (value, name) => {
     if (value === '' || value === null || value === undefined) return null;
+    // "2026-10-05T10:00" would be read in the server's time zone (UTC on Render), not the
+    // admin's, moving the date by hours; only accept times that say which zone they are in.
+    if (typeof value === 'string' && /T\d{2}:\d{2}/.test(value) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+        throw new CouponInputError(`${name} must include a time zone`);
+    }
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) throw new CouponInputError(`${name} is not a valid date`);
     return date;
@@ -151,6 +156,20 @@ const updateCoupon = async (req, res) => {
     }
 };
 
+// Pause / Resume. Only the switch changes, so the dates and rules are never re-sent and re-parsed.
+const setCouponActive = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid coupon ID' });
+    if (typeof req.body.isActive !== 'boolean') return res.status(400).json({ message: 'isActive must be true or false' });
+    try {
+        const coupon = await Coupon.findByIdAndUpdate(req.params.id, { $set: { isActive: req.body.isActive } });
+        if (!coupon) return res.status(404).json({ message: 'Coupon not found' });
+        const [saved] = await loadForAdmin({ _id: coupon._id });
+        return res.json(serializeForAdmin(saved));
+    } catch (error) {
+        return handle(res, error, 'Unable to update the coupon');
+    }
+};
+
 // Orders keep the coupon code and discount they were placed with, so history is unaffected.
 const deleteCoupon = async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid coupon ID' });
@@ -204,4 +223,4 @@ const myCoupons = async (req, res) => {
     }
 };
 
-module.exports = { listCoupons, createCoupon, updateCoupon, deleteCoupon, myCoupons };
+module.exports = { listCoupons, createCoupon, updateCoupon, setCouponActive, deleteCoupon, myCoupons };

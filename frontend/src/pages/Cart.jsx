@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import CartContext from "../context/CartContext.js";
 
@@ -7,7 +7,21 @@ const SHIPPING_FEE = 49;
 const FREE_SHIPPING_ABOVE = 499;
 
 function Cart() {
-  const { cart, updateQuantity, removeFromCart } = useContext(CartContext);
+  const { cart, updateQuantity, removeFromCart, refreshCart } = useContext(CartContext);
+  const [changes, setChanges] = useState([]);
+
+  // Prices and stock are saved with each item when it is added; show today's instead.
+  useEffect(() => {
+    let active = true;
+    refreshCart()
+      .then((notes) => {
+        if (active) setChanges(notes);
+      })
+      .catch(() => {}); // offline: the saved details stay, and checkout re-checks everything
+    return () => {
+      active = false;
+    };
+  }, [refreshCart]);
   const total = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
 
   return (
@@ -16,6 +30,12 @@ function Cart() {
         <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-700">Your basket</p>
         <h1 className="text-3xl font-bold text-gray-900">Shopping cart</h1>
       </div>
+
+      {changes.length > 0 && (
+        <ul className="mb-6 space-y-1 rounded-xl bg-amber-50 p-4 text-sm text-amber-800" role="status">
+          {changes.map((note) => <li key={note}>{note}</li>)}
+        </ul>
+      )}
 
       {cart.length === 0 ? (
         <div className="rounded-2xl bg-gray-50 p-10 text-center">

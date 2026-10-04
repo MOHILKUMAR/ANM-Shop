@@ -16,10 +16,18 @@ const getRazorpay = () => new Razorpay({
 });
 
 const ADDRESS_LIMITS = { fullName: 120, street: 300, city: 100, postalCode: 24, country: 100, phone: 20 };
-const isValidAddress = (address) => address &&
-    Object.entries(ADDRESS_LIMITS).every(([field, maxLength]) =>
+// 8 to 15 digits once spaces, brackets, and dashes are removed, optionally starting with +.
+// The checkout form applies the same rule (frontend/src/pages/Checkout.jsx).
+const isValidPhone = (phone) => /^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s()-]/g, ''));
+// The problem with the address, or null when it is complete.
+const addressProblem = (address) => {
+    const complete = address && Object.entries(ADDRESS_LIMITS).every(([field, maxLength]) =>
         typeof address[field] === 'string' && address[field].trim().length > 0 && address[field].trim().length <= maxLength,
-    ) && /^\+?[1-9]\d{7,14}$/.test(address.phone.replace(/[\s()-]/g, ''));
+    );
+    if (!complete) return 'A complete shipping address is required';
+    if (!isValidPhone(address.phone)) return 'Enter a valid mobile number with 8 to 15 digits, e.g. +91 98765 43210';
+    return null;
+};
 
 // Prices the cart (and an optional coupon) for the checkout page. The same calculation runs
 // again when the payment is created, so the total shown is the total charged.
@@ -28,7 +36,7 @@ const quoteOrder = async (req, res) => {
         const priced = await priceCart({ user: req.user, items: req.body.items, couponCode: req.body.couponCode });
         return res.json(quoteForClient(priced));
     } catch (error) {
-        if (error instanceof PricingError) return res.status(error.statusCode).json({ message: error.message });
+        if (error instanceof PricingError) return res.status(error.statusCode).json({ message: error.message, ...error.details });
         console.error('Quote error:', error.message);
         return res.status(500).json({ message: 'Unable to price your cart' });
     }
@@ -41,9 +49,8 @@ const createdOrder = async (req, res) => {
         }
 
         const { items, address, couponCode } = req.body;
-        if (!isValidAddress(address)) {
-            return res.status(400).json({ message: 'A complete shipping address is required' });
-        }
+        const problem = addressProblem(address);
+        if (problem) return res.status(400).json({ message: problem });
 
         const priced = await priceCart({ user: req.user, items, couponCode });
         // Never charge a different amount than the customer was shown.
@@ -67,8 +74,10 @@ const createdOrder = async (req, res) => {
             },
             razorpayOrderId: razorpayOrder.id,
             amountPaise: priced.totalPaise,
+            // subtotal + shipping - discount = amount: shipping is the fee before any coupon and
+            // the discount is everything the coupon saved, waived shipping included.
             subtotalPaise: priced.subtotalPaise,
-            shippingPaise: priced.shippingPaise,
+            shippingPaise: priced.shippingPaise + priced.savingsPaise - priced.discountPaise,
             discountPaise: priced.savingsPaise,
             ...(priced.coupon ? {
                 coupon: { id: priced.coupon._id, code: priced.coupon.code },
@@ -85,7 +94,7 @@ const createdOrder = async (req, res) => {
             allowedPaymentMethods: priced.coupon?.paymentMethods || [],
         });
     } catch (error) {
-        if (error instanceof PricingError) return res.status(error.statusCode).json({ message: error.message });
+        if (error instanceof PricingError) return res.status(error.statusCode).json({ message: error.message, ...error.details });
         const statusCode = Number(error?.statusCode);
         console.error('Create payment order error:', statusCode || 'unknown', error?.error?.code || error.message || 'provider error');
         if (statusCode === 401) {
@@ -228,7 +237,9 @@ const fulfillPayment = async (intentId, paymentId, paymentMethod) => {
                 totalAmount: intent.amountPaise / 100,
                 ...(intent.subtotalPaise !== undefined ? {
                     subtotalAmount: intent.subtotalPaise / 100,
-                    shippingFee: intent.shippingPaise / 100,
+                    // Worked out from the totals so checkouts started before shipping was stored
+                    // this way still give a breakdown that adds up.
+                    shippingFee: (intent.amountPaise - intent.subtotalPaise + intent.discountPaise) / 100,
                     discountAmount: intent.discountPaise / 100,
                 } : {}),
                 couponCode: intent.coupon?.code,

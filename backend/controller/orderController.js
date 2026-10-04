@@ -25,6 +25,9 @@ const getOrders = async (req, res) => {
 };
 
 const resendOrderInvoice = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid order ID' });
+    }
     try {
         const order = await Order.findOne({ _id: req.params.id, user: req.user._id })
             .populate('items.productId', 'name price');
@@ -50,6 +53,9 @@ const resendOrderInvoice = async (req, res) => {
 };
 
 const updateOrderstatus = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid order ID' });
+    }
     try {
         const { status } = req.body;
         if (!['pending', 'shipped', 'delivered'].includes(status)) {

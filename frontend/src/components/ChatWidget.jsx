@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import CartContext from "../context/CartContext.js";
-import { OPEN_CHAT_EVENT } from "../data/tickets.js";
+import { OPEN_CHAT_EVENT, TICKETS_CHANGED_EVENT } from "../data/tickets.js";
 
 const MAX_LENGTH = 1000;
 
@@ -106,6 +106,9 @@ function ChatPanel({ open, onClose }) {
           for (let count = 0; count < action.quantity; count += 1) addToCart(action.product);
         }
       }
+      if (result.actions.some((action) => action.type === "ticket_created")) {
+        window.dispatchEvent(new Event(TICKETS_CHANGED_EVENT));
+      }
       setMessages((current) => [...current, result.message]);
       setChatFull(result.turnsLeft <= 0);
     } catch (requestError) {
@@ -113,7 +116,8 @@ function ChatPanel({ open, onClose }) {
       setDraft(text);
       setError(requestError.message);
       if (requestError.data?.chatFull) setChatFull(true);
-      if (requestError.status === 503) setConfigured(false);
+      // Only a switched-off assistant hides the input; "busy" and quota errors are temporary.
+      if (requestError.data?.offline) setConfigured(false);
     } finally {
       setSending(false);
     }
@@ -194,7 +198,8 @@ function ChatPanel({ open, onClose }) {
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) send(event);
+                        // Not while an input method (e.g. Hindi typing) is still composing a word.
+                        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) send(event);
                       }}
                     />
                     <button className="rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50" type="submit" disabled={sending || !draft.trim() || !messages}>
