@@ -122,6 +122,15 @@ function AdminCoupons({ token }) {
 
   async function save(event) {
     event.preventDefault();
+    // Same rule as the server, so the admin hears about it before saving.
+    if (!/^[A-Z0-9_-]{3,30}$/.test(form.code.trim())) {
+      setError("The code must be 3 to 30 letters, numbers, dashes, or underscores (no spaces).");
+      return;
+    }
+    if (form.expiresAt && form.startsAt && new Date(form.expiresAt) <= new Date(form.startsAt)) {
+      setError("The expiry must be after the start.");
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");

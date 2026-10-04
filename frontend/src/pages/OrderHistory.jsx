@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 const formatMoney = (amount) => `INR ${Number(amount || 0).toFixed(2)}`;
 const orderDate = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
@@ -134,6 +135,7 @@ async function downloadBill(order) {
 function OrderHistory() {
   const { user } = useContext(AuthContext);
   const [orders, setOrders] = useState([]);
+  usePageMeta({ title: "My orders", noindex: true });
   const [loading, setLoading] = useState(Boolean(user?.token));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");

@@ -154,5 +154,17 @@ html[data-theme="dark"] .text-green-800 { color: #a9d9b6 !important; }
 html[data-theme="dark"] .bg-red-50 { background-color: #3b2529 !important; }
 html[data-theme="dark"] .text-red-700 { color: #f0afb0 !important; }
 html[data-theme="dark"] .bg-amber-50 { background-color: #382e20 !important; }
+html[data-theme="dark"] .text-amber-700,
 html[data-theme="dark"] .text-amber-800,
-html[data-theme="dark"] .text-amber-900 { color: #edcf96 !important; }
+html[data-theme="dark"] .text-amber-900,
+html[data-theme="dark"] .hover:text-amber-900:hover { color: #edcf96 !important; }
+/* Red, green, and amber text that is readable on white is too dark on the dark surfaces
+   (about 3.3:1); these lighter tones keep it above the 4.5:1 WCAG AA minimum. */
+html[data-theme="dark"] .text-red-600,
+html[data-theme="dark"] .hover:text-red-800:hover { color: #f0afb0 !important; }
+html[data-theme="dark"] .text-green-700 { color: #a9d9b6 !important; }
+html[data-theme="dark"] textarea::placeholder { color: #a997a1; }
+
+/* Placeholder text, which Tailwind fades to half the text colour (about 3:1), at a readable 5:1. */
+input::placeholder,
+textarea::placeholder { color: var(--text-secondary); opacity: 1; }

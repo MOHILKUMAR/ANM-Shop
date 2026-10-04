@@ -1,0 +1,16 @@
+# ANM-Shop: let search engines index the shop, not the private account and admin pages.
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /orders
+Disallow: /cart
+Disallow: /checkout
+Disallow: /support
+Disallow: /login
+Disallow: /register
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
+
+Sitemap: https://anm-shop.vercel.app/sitemap.xml

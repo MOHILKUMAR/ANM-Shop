@@ -11,6 +11,8 @@ const createLimiter = (limit, message, options = {}) => rateLimit({
 
 const authLimiter = createLimiter(20, 'Too many account requests. Try again later.');
 const otpLimiter = createLimiter(8, 'Too many verification attempts. Try again later.');
+// New accounts from one network per hour, on top of authLimiter; stops mass sign-ups.
+const signupLimiter = createLimiter(10, 'Too many new accounts from this network. Try again later.', { windowMs: 60 * 60 * 1000 });
 const paymentLimiter = createLimiter(12, 'Too many payment requests. Try again later.');
 // Keyed by account (must run after `protect`) so one user can't drain the shared email quota
 // that verification codes also depend on, even by switching IP addresses.
@@ -30,5 +32,5 @@ const quoteLimiter = createLimiter(120, 'Too many price checks. Wait a few minut
 const reviewLimiter = createLimiter(20, 'Too many review changes. Try again later.', { ...perUser, windowMs: 60 * 60 * 1000 });
 
 module.exports = {
-    authLimiter, otpLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter, quoteLimiter, reviewLimiter,
+    authLimiter, otpLimiter, signupLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter, quoteLimiter, reviewLimiter,
 };

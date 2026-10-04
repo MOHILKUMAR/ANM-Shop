@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
+import { usePageMeta } from "../usePageMeta.js";
 
 // Shown for any address the app has no page for (Vercel sends every path to the app).
 function NotFound() {
+  usePageMeta({ title: "Page not found", noindex: true });
   return (
     <main className="mx-auto min-h-[60vh] max-w-3xl px-4 py-16 text-center">
       <p className="text-sm font-semibold uppercase tracking-wider text-brand-700">Error 404</p>

@@ -1,6 +1,8 @@
 import { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import CartContext from "../context/CartContext.js";
+import { productImage } from "../imageUrl.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 // Display only; the server works out the real shipping and total at checkout.
 const SHIPPING_FEE = 49;
@@ -9,6 +11,7 @@ const FREE_SHIPPING_ABOVE = 499;
 function Cart() {
   const { cart, updateQuantity, removeFromCart, refreshCart } = useContext(CartContext);
   const [changes, setChanges] = useState([]);
+  usePageMeta({ title: "Your cart", noindex: true });
 
   // Prices and stock are saved with each item when it is added; show today's instead.
   useEffect(() => {
@@ -47,7 +50,7 @@ function Cart() {
           <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
             {cart.map((item) => (
               <li key={item._id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-                <img className="h-24 w-24 rounded-lg bg-gray-50 object-contain" src={item.imageUrls} alt={item.name} />
+                <img className="h-24 w-24 rounded-lg bg-gray-50 object-contain" src={productImage(item.imageUrls, 96)} alt={item.name} width="96" height="96" loading="lazy" decoding="async" />
                 <div className="min-w-0 flex-1">
                   <Link className="font-semibold text-gray-900 hover:text-brand-700" to={`/product/${item._id}`}>{item.name}</Link>
                   <p className="mt-1 text-sm text-gray-600">{Number(item.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })} each</p>

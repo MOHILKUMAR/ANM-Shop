@@ -4,12 +4,17 @@ import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import CartContext from "../context/CartContext.js";
 import { Shimmer } from "../components/Skeletons.jsx";
+import { usePageMeta } from "../usePageMeta.js";
 
 const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const methodLabels = { upi: "UPI", card: "Card", netbanking: "Net banking", wallet: "Wallet" };
 // Same rule as the server: 8 to 15 digits once spaces, brackets, and dashes are removed.
 const isValidPhone = (phone) => /^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s()-]/g, ""));
 const PHONE_HINT = "Enter a valid mobile number with 8 to 15 digits, e.g. +91 98765 43210.";
+// The server's limits for each address field.
+const ADDRESS_LIMITS = { fullName: 120, street: 300, city: 100, postalCode: 24, country: 100, phone: 20 };
+// Indian PIN codes are 6 digits and never start with 0; other countries are checked loosely.
+const isValidPostalCode = (code, country) => !/^india$/i.test(country.trim()) || /^[1-9]\d{5}$/.test(code.replace(/\s/g, ""));
 // Identifies one price check, so the page knows whether the quote on screen is for what's shown.
 const quoteKeyOf = (itemsKey, couponCode, attempt) => JSON.stringify([itemsKey, couponCode, attempt]);
 
@@ -28,6 +33,7 @@ function Checkout() {
   const { user } = useContext(AuthContext);
   const { cart, clearCart, refreshCart } = useContext(CartContext);
   const navigate = useNavigate();
+  usePageMeta({ title: "Checkout", noindex: true });
   const [sdkReady, setSdkReady] = useState(Boolean(window.Razorpay));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -196,8 +202,20 @@ function Checkout() {
   async function startPayment(event) {
     event.preventDefault();
     setError("");
+    const blank = Object.keys(ADDRESS_LIMITS).find((field) => !address[field].trim());
+    if (blank) {
+      setError("Fill in every part of the shipping address.");
+      document.getElementById(blank)?.focus();
+      return;
+    }
+    if (!isValidPostalCode(address.postalCode, address.country)) {
+      setError("Enter a valid 6-digit PIN code, e.g. 110001.");
+      document.getElementById("postalCode")?.focus();
+      return;
+    }
     if (!isValidPhone(address.phone)) {
       setError(PHONE_HINT);
+      document.getElementById("phone")?.focus();
       return;
     }
     setBusy(true);
@@ -298,7 +316,7 @@ function Checkout() {
             ].map(([field, label, type, autocomplete]) => (
               <div className={field === "street" ? "sm:col-span-2" : ""} key={field}>
                 <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor={field}>{label}</label>
-                <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id={field} name={field} type={type} autoComplete={autocomplete} placeholder={field === "phone" ? "+91 98765 43210" : undefined} maxLength={field === "phone" ? 20 : undefined} required value={address[field]} onChange={updateAddress} />
+                <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id={field} name={field} type={type} autoComplete={autocomplete} placeholder={field === "phone" ? "+91 98765 43210" : undefined} maxLength={ADDRESS_LIMITS[field]} inputMode={field === "postalCode" ? "numeric" : undefined} required value={address[field]} onChange={updateAddress} />
               </div>
             ))}
           </div>
@@ -319,7 +337,11 @@ function Checkout() {
           <button className="w-full rounded-lg bg-brand-700 px-5 py-3 font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={busy || !sdkReady || !pricingReady}>
             {!sdkReady ? "Loading secure payment…" : busy ? "Waiting for payment…" : pricingReady ? `Pay ${money(quote.total)} securely` : "Pay securely"}
           </button>
-          <p className="text-center text-xs text-gray-500">Prices, stock, and coupons are checked by the server before payment.</p>
+          <p className="text-center text-xs text-gray-500">
+            By paying you agree to our <Link className="underline hover:text-brand-700" to="/terms">Terms</Link>,{" "}
+            <Link className="underline hover:text-brand-700" to="/returns">Returns policy</Link>, and{" "}
+            <Link className="underline hover:text-brand-700" to="/privacy">Privacy policy</Link>. Prices, stock, and coupons are checked again before payment.
+          </p>
         </form>
 
         <aside className="h-fit space-y-5 rounded-xl border border-gray-200 bg-white p-6">

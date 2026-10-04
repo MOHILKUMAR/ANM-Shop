@@ -5,12 +5,14 @@ import AuthContext from "../context/AuthContext.js";
 import { ListSkeleton } from "../components/Skeletons.jsx";
 import { TicketSummary, TicketThread } from "../components/TicketThread.jsx";
 import { OPEN_CHAT_EVENT, TICKETS_CHANGED_EVENT, ticketCategories } from "../data/tickets.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const emptyForm = { subject: "", category: "order", orderCode: "", description: "" };
 
 function Support() {
   const { user } = useContext(AuthContext);
+  usePageMeta({ title: "Support", noindex: true });
   const [tickets, setTickets] = useState(null);
   const [orders, setOrders] = useState([]);
   const [form, setForm] = useState(emptyForm);

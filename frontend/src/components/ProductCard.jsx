@@ -2,8 +2,10 @@ import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import CartContext from "../context/CartContext.js";
 import { overallRating, reviewCountLabel } from "../data/reviews.js";
+import { productImage } from "../imageUrl.js";
 
-function ProductCard({ product }) {
+// `priority`: one of the first cards on screen, so its image loads first instead of lazily.
+function ProductCard({ product, priority = false }) {
   const { addToCart } = useContext(CartContext);
   const [added, setAdded] = useState(false);
   const overall = product.numReviews > 0 ? overallRating(product.ratingCounts) : null;
@@ -11,7 +13,7 @@ function ProductCard({ product }) {
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <Link className="flex h-56 items-center justify-center bg-gray-50 p-5" to={`/product/${product._id}`}>
-        <img className="h-full w-full object-contain" src={product.imageUrls} alt={product.name} />
+        <img className="h-full w-full object-contain" src={productImage(product.imageUrls, 300)} alt={product.name} width="300" height="300" loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" />
       </Link>
       <div className="flex flex-1 flex-col p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">{product.category}</p>

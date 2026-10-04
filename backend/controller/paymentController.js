@@ -26,6 +26,10 @@ const addressProblem = (address) => {
     );
     if (!complete) return 'A complete shipping address is required';
     if (!isValidPhone(address.phone)) return 'Enter a valid mobile number with 8 to 15 digits, e.g. +91 98765 43210';
+    // Indian PIN codes are 6 digits and never start with 0.
+    if (/^india$/i.test(address.country.trim()) && !/^[1-9]\d{5}$/.test(address.postalCode.replace(/\s/g, ''))) {
+        return 'Enter a valid 6-digit PIN code, e.g. 110001';
+    }
     return null;
 };
 

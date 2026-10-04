@@ -1,6 +1,11 @@
 import { supportEmail, linkedinProfile } from "../data/contactInfo.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 function Contact() {
+  usePageMeta({
+    title: "Contact us",
+    description: "Questions about a product, an order, or a return? Email ANM-Shop support or open a ticket and we'll get back to you.",
+  });
   return (
     <main className="mx-auto min-h-[65vh] max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="max-w-2xl">

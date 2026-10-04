@@ -2,10 +2,12 @@ import { useContext, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 function VerifyEmail() {
   const location = useLocation();
   const navigate = useNavigate();
+  usePageMeta({ title: "Verify your email", noindex: true });
   const { login } = useContext(AuthContext);
   const [email, setEmail] = useState(location.state?.email || "");
   const [otp, setOtp] = useState("");
@@ -20,6 +22,7 @@ function VerifyEmail() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
+  const [formStartedAt] = useState(() => Date.now());
 
   async function verifyCode(event) {
     event.preventDefault();
@@ -47,7 +50,7 @@ function VerifyEmail() {
       const result = await apiRequest("/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, formStartedAt }),
       });
       setNotice(result.message);
     } catch (requestError) {

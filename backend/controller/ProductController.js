@@ -54,7 +54,12 @@ const parseProductFields = (body, partial = false) => {
 
 const uploadProductImage = (file) => new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-        { resource_type: 'image', folder: 'anm-shop/products' },
+        {
+            resource_type: 'image',
+            folder: 'anm-shop/products',
+            // Stored at most 1600px on the longest side; the storefront asks for smaller sizes.
+            transformation: [{ width: 1600, height: 1600, crop: 'limit', quality: 'auto:good' }],
+        },
         (error, result) => {
             if (error) return reject(error);
             if (!result?.secure_url) return reject(new Error('Image provider returned no secure URL'));

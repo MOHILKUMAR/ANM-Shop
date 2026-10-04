@@ -73,6 +73,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
     res.json({ service: 'ANM-Shop API', status: 'ok' });
 });
+app.get('/sitemap.xml', require('./controller/sitemapController').sitemap);
 
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
