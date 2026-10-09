@@ -8,6 +8,7 @@ import AdminTickets from "../components/AdminTickets.jsx";
 import AdminCoupons from "../components/AdminCoupons.jsx";
 import AdminReviews from "../components/AdminReviews.jsx";
 import AdminCategories from "../components/AdminCategories.jsx";
+import AdminOrders from "../components/AdminOrders.jsx";
 import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
 import { useCategories } from "../useCategories.js";
 import ProductPhotos, { MAX_PHOTOS, MAX_PHOTO_BYTES } from "../components/ProductPhotos.jsx";
@@ -26,7 +27,6 @@ function AdminDashboard() {
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [productPage, setProductPage] = useState(1);
-  const [orders, setOrders] = useState([]);
   const [tab, setTab] = useState("products");
   const [product, setProduct] = useState(emptyProduct);
   const [editingProductId, setEditingProductId] = useState(null);
@@ -47,14 +47,12 @@ function AdminDashboard() {
     Promise.all([
       apiRequest("/analytics", { token: user.token }),
       apiRequest(`/products/manage?page=${productPage}&limit=50`, { token: user.token }),
-      apiRequest("/orders", { token: user.token }),
     ])
-      .then(([nextStats, nextProducts, nextOrders]) => {
+      .then(([nextStats, nextProducts]) => {
         if (!active) return;
         setStats(nextStats);
         setProducts(nextProducts.items || []);
         setProductPagination(nextProducts.pagination || { page: 1, pages: 1, total: 0 });
-        setOrders(nextOrders);
       })
       .catch((requestError) => {
         if (active) setError(requestError.message);
@@ -143,34 +141,6 @@ function AdminDashboard() {
     }
   }
 
-  async function deleteOrder(order) {
-    const code = `#${order._id.slice(-8).toUpperCase()}`;
-    if (!window.confirm(`Delete order ${code}?\n\nThis removes the order record only. It does NOT refund the customer or restore stock. The payment record is kept.`)) return;
-    setError("");
-    try {
-      const result = await apiRequest(`/orders/${order._id}`, { method: "DELETE", token: user.token });
-      setNotice(result.message);
-      setRefreshKey((key) => key + 1);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  }
-
-  async function updateStatus(orderId, status) {
-    setError("");
-    try {
-      await apiRequest(`/orders/${orderId}/status`, {
-        method: "PUT",
-        token: user.token,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      setRefreshKey((key) => key + 1);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  }
-
   function startEditing(item) {
     setEditingProductId(item._id);
     setProduct({
@@ -193,7 +163,7 @@ function AdminDashboard() {
       {error && <p className="mb-5 rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
       {notice && <p className="mb-5 rounded-lg bg-green-50 p-4 text-green-800" role="status">{notice}</p>}
 
-      {/* Stats, products, and orders arrive together, so one flag covers the first load. */}
+      {/* Stats and products arrive together, so one flag covers the first load. */}
       {loadingData ? <StatTilesSkeleton /> : (
       <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
@@ -365,26 +335,7 @@ function AdminDashboard() {
       ) : tab === "categories" ? (
         <AdminCategories token={user.token} />
       ) : (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Customer orders{loadingData ? "" : ` (${orders.length})`}</h2>
-          {loadingData && <ListSkeleton rows={4} label="Loading orders" />}
-          {orders.map((order) => (
-            <article className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 md:flex-row md:items-center" key={order._id}>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-gray-900">Order #{order._id.slice(-8).toUpperCase()}</h3>
-                <p className="mt-1 text-sm text-gray-500">{order.user?.name || "Customer"} | {order.user?.email || ""} | {new Date(order.createdAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</p>
-                <p className="mt-2 text-sm text-gray-700">{order.items.map((item) => `${item.productId?.name || "Product"} x ${item.qty}`).join(", ")}</p>
-              </div>
-              <p className="font-semibold text-gray-900">{formatInr(order.totalAmount)}</p>
-              <label className="sr-only" htmlFor={`status-${order._id}`}>Order status</label>
-              <select className="rounded-lg border border-gray-300 px-3 py-2 capitalize" id={`status-${order._id}`} value={order.status} onChange={(event) => updateStatus(order._id, event.target.value)}>
-                {["pending", "shipped", "delivered"].map((status) => <option className="capitalize" key={status} value={status}>{status}</option>)}
-              </select>
-              <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
-            </article>
-          ))}
-          {!loadingData && orders.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders yet.</p>}
-        </section>
+        <AdminOrders token={user.token} onChanged={() => setRefreshKey((key) => key + 1)} />
       )}
     </main>
   );

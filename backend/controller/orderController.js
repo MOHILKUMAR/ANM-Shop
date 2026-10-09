@@ -12,15 +12,35 @@ const myOrders = async (req, res) => {
     }
 };
 
+// GET /api/orders — every order for admins, newest first, a page at a time, optionally only one
+// status, with how many orders have each status.
+const ADMIN_PAGE_SIZE = 20;
 const getOrders = async (req, res) => {
+    const page = Number.parseInt(req.query.page, 10) || 1;
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || ADMIN_PAGE_SIZE, 1), 100);
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    const statuses = Order.schema.path('status').enumValues;
+    if (page < 1 || (status && !statuses.includes(status))) {
+        return res.status(400).json({ message: 'Invalid page or order status' });
+    }
     try {
-        const orders = await Order.find({})
-            .populate('user', 'name email')
-            .populate('items.productId', 'name price imageUrls')
-            .sort({ createdAt: -1 });
-        res.json(orders);
+        const filter = status ? { status } : {};
+        const [orders, total, counts] = await Promise.all([
+            Order.find(filter)
+                .populate('user', 'name email')
+                .populate('items.productId', 'name price imageUrls')
+                .sort({ createdAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit),
+            Order.countDocuments(filter),
+            Order.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+        ]);
+        const byStatus = Object.fromEntries(statuses.map((value) => [value, 0]));
+        counts.forEach(({ _id, count }) => { if (_id in byStatus) byStatus[_id] = count; });
+        return res.json({ orders, counts: byStatus, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
     } catch (error) {
-        res.status(500).json({ message: 'Error fetching orders' });
+        console.error('List orders error:', error.message);
+        return res.status(500).json({ message: 'Error fetching orders' });
     }
 };
 
