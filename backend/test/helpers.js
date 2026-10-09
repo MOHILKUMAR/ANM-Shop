@@ -80,6 +80,19 @@ class FakeRazorpay {
 }
 stub('razorpay', FakeRazorpay);
 
+// Photo uploads get a made-up Cloudinary URL instead of going to Cloudinary.
+const uploads = [];
+stub('./config/cloudinary', {
+    uploader: {
+        upload_stream: (options, callback) => ({
+            end: (buffer) => {
+                uploads.push(buffer);
+                callback(null, { secure_url: `https://res.cloudinary.com/demo/image/upload/v1/test-${uploads.length}.jpg` });
+            },
+        }),
+    },
+});
+
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -89,6 +102,8 @@ let replSet;
 const startDb = async () => {
     replSet = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
     await mongoose.connect(replSet.getUri());
+    // Build every index now (e.g. the product text index) instead of in the background.
+    await mongoose.connection.syncIndexes();
     const { ensureDefaultCategories, clearCategoryCache } = require('../utils/categories');
     clearCategoryCache();
     await ensureDefaultCategories();

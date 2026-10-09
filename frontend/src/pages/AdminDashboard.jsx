@@ -10,11 +10,11 @@ import AdminReviews from "../components/AdminReviews.jsx";
 import AdminCategories from "../components/AdminCategories.jsx";
 import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
 import { useCategories } from "../useCategories.js";
+import ProductPhotos, { MAX_PHOTOS, MAX_PHOTO_BYTES } from "../components/ProductPhotos.jsx";
 import { productImage } from "../imageUrl.js";
 import { usePageMeta } from "../usePageMeta.js";
 import { formatInr } from "../money.js";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // the server's upload limit
 const emptyProduct = { name: "", description: "", price: "", category: "", stock: "" };
 
 function AdminDashboard() {
@@ -30,7 +30,9 @@ function AdminDashboard() {
   const [tab, setTab] = useState("products");
   const [product, setProduct] = useState(emptyProduct);
   const [editingProductId, setEditingProductId] = useState(null);
-  const [image, setImage] = useState(null);
+  // Saved photos kept when editing, and new photos to upload.
+  const [keptImages, setKeptImages] = useState([]);
+  const [newImages, setNewImages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -89,8 +91,16 @@ function AdminDashboard() {
       setError("Enter a product name and description.");
       return;
     }
-    if (image && image.size > MAX_IMAGE_BYTES) {
-      setError("The image must be 5 MB or smaller. Choose a smaller JPEG, PNG, or WebP file.");
+    if (keptImages.length + newImages.length === 0) {
+      setError("Add at least one photo.");
+      return;
+    }
+    if (keptImages.length + newImages.length > MAX_PHOTOS) {
+      setError(`A product can have at most ${MAX_PHOTOS} photos.`);
+      return;
+    }
+    if (newImages.some((file) => file.size > MAX_PHOTO_BYTES)) {
+      setError("Each photo must be 5 MB or smaller. Remove the ones marked too large.");
       return;
     }
     setBusy(true);
@@ -100,7 +110,8 @@ function AdminDashboard() {
     try {
       const body = new FormData();
       Object.entries(product).forEach(([key, value]) => body.append(key, value));
-      if (image) body.append("image", image);
+      newImages.forEach((file) => body.append("images", file));
+      if (editingProductId) body.append("keepImages", JSON.stringify(keptImages));
       await apiRequest(editingProductId ? `/products/${editingProductId}` : "/products", {
         method: editingProductId ? "PUT" : "POST",
         token: user.token,
@@ -108,7 +119,8 @@ function AdminDashboard() {
       });
       setNotice(editingProductId ? "Product updated." : "Product added to the beauty catalog.");
       setProduct(emptyProduct);
-      setImage(null);
+      setKeptImages([]);
+      setNewImages([]);
       setEditingProductId(null);
       form.reset();
       setRefreshKey((key) => key + 1);
@@ -169,7 +181,8 @@ function AdminDashboard() {
       category: categoryNames.includes(item.category) ? item.category : "",
       stock: String(item.stock),
     });
-    setImage(null);
+    setKeptImages(item.images?.length ? item.images : [item.imageUrls].filter(Boolean));
+    setNewImages([]);
     setNotice("");
   }
 
@@ -310,13 +323,9 @@ function AdminDashboard() {
                 {categoryNames.map((category) => <option value={category} key={category}>{category}</option>)}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="product-image">Product image</label>
-              <p className="mb-1 text-xs text-gray-500" id="product-image-hint">JPEG, PNG, or WebP, up to 5 MB.</p>
-              <input className="w-full text-sm text-gray-600" id="product-image" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="product-image-hint" required={!editingProductId} onChange={(event) => setImage(event.target.files?.[0] || null)} />
-            </div>
+            <ProductPhotos kept={keptImages} onKeptChange={setKeptImages} added={newImages} onAddedChange={setNewImages} />
             <button className="w-full rounded-lg bg-brand-700 px-4 py-2.5 font-semibold text-white hover:bg-brand-800 disabled:opacity-60" type="submit" disabled={busy}>{busy ? "Saving..." : editingProductId ? "Save changes" : "Add product"}</button>
-            {editingProductId && <button className="w-full rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-50" type="button" onClick={() => { setEditingProductId(null); setProduct(emptyProduct); setImage(null); }}>Cancel edit</button>}
+            {editingProductId && <button className="w-full rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-50" type="button" onClick={() => { setEditingProductId(null); setProduct(emptyProduct); setKeptImages([]); setNewImages([]); }}>Cancel edit</button>}
           </form>
 
           <section className="space-y-3">
