@@ -241,8 +241,10 @@ const fulfillPayment = async (intentId, paymentId, paymentMethod) => {
                 totalAmount: intent.amountPaise / 100,
                 ...(intent.subtotalPaise !== undefined ? {
                     subtotalAmount: intent.subtotalPaise / 100,
-                    // The fee before any coupon; a free-shipping coupon's saving is in the discount.
-                    shippingFee: intent.shippingPaise / 100,
+                    // The fee before any coupon (a free-shipping coupon's saving is in the discount),
+                    // worked out from the totals so the breakdown always adds up to what was paid,
+                    // including on checkouts started before shipping was stored this way.
+                    shippingFee: (intent.amountPaise - intent.subtotalPaise + intent.discountPaise) / 100,
                     discountAmount: intent.discountPaise / 100,
                 } : {}),
                 couponCode: intent.coupon?.code,
