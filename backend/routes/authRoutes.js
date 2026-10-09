@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
     registerUser, verifyEmail, resendVerificationOtp, loginUser, changePassword,
-    forgotPassword, resetPassword, deleteUser, getUsers,
+    forgotPassword, resetPassword, deleteUser, getUsers, deleteMyAccount, setUserRole,
 } = require("../controller/authController");
 const {protect  } = require('../middleware/authMiddleware');
 const { admin } = require('../middleware/adminMiddleware');
@@ -27,6 +27,8 @@ router.post("/forgot-password", otpLimiter, spamGuard(fakeResetRequest), forgotP
 router.post("/reset-password", otpLimiter, resetPassword);
 router.get("/users", protect, admin,  getUsers);
 router.delete("/users/:id", protect, admin, deleteUser);
+router.put("/users/:id/role", protect, admin, setUserRole);
+router.delete("/me", authLimiter, protect, deleteMyAccount);
 
 
 module.exports = router;

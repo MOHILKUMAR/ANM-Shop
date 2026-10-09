@@ -327,7 +327,7 @@ function AdminDashboard() {
       ) : tab === "search" ? (
         <AdminSearch token={user.token} />
       ) : tab === "users" ? (
-        <AdminUsers token={user.token} />
+        <AdminUsers token={user.token} currentUserId={user._id} />
       ) : tab === "tickets" ? (
         <AdminTickets token={user.token} />
       ) : tab === "coupons" ? (

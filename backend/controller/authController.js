@@ -343,6 +343,16 @@ const resetPassword = async (req, res) => {
 
 // Orders and payment records are kept (they show as "Deleted account"); the account's
 // sign-in tokens stop working because `protect` no longer finds the user.
+// Deletes an account with its chat history and reviews (recounting the affected products).
+// Orders, payments and tickets stay as business records, as the privacy policy says.
+const removeAccount = async (user) => {
+    await user.deleteOne();
+    await ChatConversation.deleteOne({ user: user._id });
+    const reviewedProducts = await Review.distinct('product', { user: user._id });
+    await Review.deleteMany({ user: user._id });
+    await Promise.all(reviewedProducts.map((productId) => refreshProductRating(productId)));
+};
+
 const deleteUser = async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) {
         return res.status(400).json({ message: 'Invalid user ID' });
@@ -355,15 +365,9 @@ const deleteUser = async (req, res) => {
         const user = await User.findById(req.params.id).select('role');
         if (!user) return res.status(404).json({ message: 'Account not found' });
         if (user.role === 'admin') {
-            return res.status(409).json({ message: "Admin accounts can't be deleted here" });
+            return res.status(409).json({ message: "Admin accounts can't be deleted. Change their role to customer first." });
         }
-        await user.deleteOne();
-        // Chat history is personal; tickets stay with the orders and payments as records.
-        await ChatConversation.deleteOne({ user: user._id });
-        // Their reviews go too, and the affected products are recounted.
-        const reviewedProducts = await Review.distinct('product', { user: user._id });
-        await Review.deleteMany({ user: user._id });
-        await Promise.all(reviewedProducts.map((productId) => refreshProductRating(productId)));
+        await removeAccount(user);
         return res.json({ message: 'Account deleted with their reviews. Their orders, payments, and tickets are kept as records.' });
     } catch (error) {
         console.error('Delete user error:', error.message);
@@ -381,7 +385,8 @@ const getUsers = async (req, res) => {
                 { $group: {
                     _id: '$user',
                     orderCount: { $sum: 1 },
-                    totalSpent: { $sum: '$totalAmount' },
+                    // Cancelled and returned orders were refunded.
+                    totalSpent: { $sum: { $cond: [{ $in: ['$status', ['cancelled', 'returned']] }, 0, '$totalAmount'] } },
                     lastOrderAt: { $max: '$createdAt' },
                 } },
             ]),
@@ -404,7 +409,74 @@ const getUsers = async (req, res) => {
     }
 };
 
+// DELETE /api/auth/me — a customer deletes their own account after confirming their password.
+// Refused while an order is still on its way (they couldn't follow it afterwards), and for
+// admins, who must be made a customer by another admin first so the shop always keeps one.
+const deleteMyAccount = async (req, res) => {
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+    if (!password) return res.status(400).json({ message: 'Enter your password to confirm' });
+    try {
+        const user = await User.findById(req.user._id).select('+password');
+        if (!user) return res.status(404).json({ message: 'Account not found' });
+        if (!(await bcrypt.compare(password, user.password))) {
+            // 400, not 401: a wrong password must not sign the person out.
+            return res.status(400).json({ message: 'That password is not correct' });
+        }
+        if (user.role === 'admin') {
+            return res.status(409).json({ message: 'Admin accounts can’t be deleted. Ask another admin to change your role to customer first.' });
+        }
+        const activeOrders = await Order.countDocuments({ user: user._id, status: { $in: ['pending', 'shipped'] } });
+        if (activeOrders) {
+            const them = activeOrders === 1 ? 'it' : 'them';
+            return res.status(409).json({ message: `You have ${activeOrders} order${activeOrders === 1 ? '' : 's'} on the way. Cancel ${them} on My orders or wait for delivery, then delete your account.` });
+        }
+        await removeAccount(user);
+        const text = `Hi ${user.name},\n\nYour ANM-Shop account (${user.email}) has been deleted, with your reviews and chat history. Records of past orders and payments are kept as the law requires.\n\nIf you didn't do this, contact us by replying to this email.`;
+        const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#33252e"><h1 style="color:#754656;font-size:22px">Your account has been deleted</h1><p>Your ANM-Shop account (${escapeHtml(user.email)}) has been deleted, with your reviews and chat history. Records of past orders and payments are kept as the law requires.</p><p>If you didn't do this, contact us by replying to this email.</p></div>`;
+        sendEmail(user.email, 'Your ANM-Shop account was deleted', text, html).catch(() => {});
+        return res.json({ message: 'Your account has been deleted.' });
+    } catch (error) {
+        console.error('Delete own account error:', error.message);
+        return res.status(500).json({ message: 'Unable to delete your account' });
+    }
+};
+
+// PUT /api/auth/users/:id/role (admin) — make someone an admin or a customer. Admins can't change
+// their own role, only verified accounts can become admins, and the last admin can't be removed.
+const setUserRole = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid user ID' });
+    const { role } = req.body;
+    if (!['user', 'admin'].includes(role)) return res.status(400).json({ message: 'Role must be user or admin' });
+    if (req.user._id.equals(req.params.id)) return res.status(409).json({ message: 'You can’t change your own role' });
+    try {
+        const user = await User.findById(req.params.id).select('name email role verified');
+        if (!user) return res.status(404).json({ message: 'Account not found' });
+        if (role === 'admin' && !user.verified) {
+            return res.status(409).json({ message: 'Only accounts with a verified email can become admins' });
+        }
+        const summary = () => ({ _id: user._id, name: user.name, email: user.email, role: user.role, verified: user.verified });
+        if (user.role === role) {
+            return res.json({ message: `${user.name} is already ${role === 'admin' ? 'an admin' : 'a customer'}`, user: summary() });
+        }
+        user.role = role;
+        await user.save();
+        // Two admins removing each other at the same moment must not leave the shop without one.
+        if (role === 'user' && (await User.countDocuments({ role: 'admin' })) === 0) {
+            user.role = 'admin';
+            await user.save();
+            return res.status(409).json({ message: 'The shop needs at least one admin' });
+        }
+        return res.json({
+            message: role === 'admin' ? `${user.name} is now an admin` : `${user.name} is now a customer`,
+            user: summary(),
+        });
+    } catch (error) {
+        console.error('Set user role error:', error.message);
+        return res.status(500).json({ message: 'Unable to change the role' });
+    }
+};
+
 module.exports = {
     registerUser, verifyEmail, resendVerificationOtp, loginUser, changePassword,
-    forgotPassword, resetPassword, deleteUser, getUsers,
+    forgotPassword, resetPassword, deleteUser, getUsers, deleteMyAccount, setUserRole,
 };

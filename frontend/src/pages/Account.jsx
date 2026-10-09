@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import MyCoupons from "../components/MyCoupons.jsx";
+import DeleteAccount from "../components/DeleteAccount.jsx";
 import { usePageMeta } from "../usePageMeta.js";
 
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 
 function Account() {
-  const { user, login } = useContext(AuthContext);
+  const { user, login, logout } = useContext(AuthContext);
   usePageMeta({ title: "Account settings", noindex: true });
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -17,6 +18,28 @@ function Account() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [deletedMessage, setDeletedMessage] = useState("");
+
+  // After deleting the account: forget its saved cart on this device and sign out.
+  function accountDeleted(message) {
+    try {
+      localStorage.removeItem(`shopnestCart:${user._id}`);
+    } catch {
+      // Storage blocked: nothing saved to remove.
+    }
+    setDeletedMessage(message);
+    logout();
+  }
+
+  if (deletedMessage) {
+    return (
+      <main className="mx-auto min-h-[60vh] max-w-3xl px-4 py-16 text-center">
+        <h1 className="text-3xl font-bold text-gray-900">Account deleted</h1>
+        <p className="mt-3 text-gray-600">{deletedMessage} A confirmation is on its way to your email.</p>
+        <Link className="mt-6 inline-block font-semibold text-brand-700" to="/">Back to the shop</Link>
+      </main>
+    );
+  }
 
   if (!user) {
     return (
@@ -104,6 +127,8 @@ function Account() {
           {submitting ? "Changing…" : "Change password"}
         </button>
       </form>
+
+      <DeleteAccount user={user} onDeleted={accountDeleted} />
     </main>
   );
 }
