@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Order = require('../model/Order');
 const sendOrderInvoice = require('../utils/sendOrderInvoice');
+const { closeOrder, retryRefund, OrderActionError } = require('../utils/orderRefunds');
+
 const myOrders = async (req, res) => {
     try {
         const orders = await Order.find({ user: req.user._id })
@@ -83,12 +85,14 @@ const updateOrderstatus = async (req, res) => {
         }
 
         const order = await Order.findById(req.params.id);
-        if (order) {
-            order.status = status;
-            await order.save();
-            return res.json({ message: 'Order status updated', order });
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+        // Cancelled and returned orders have been refunded; they can't be reopened.
+        if (['cancelled', 'returned'].includes(order.status)) {
+            return res.status(409).json({ message: `This order was ${order.status} and refunded; its status can't change` });
         }
-        return res.status(404).json({ message: 'Order not found' });
+        order.status = status;
+        await order.save();
+        return res.json({ message: 'Order status updated', order });
     } catch (error) {
         return res.status(500).json({ message: 'Unable to update order status' });
     }
@@ -110,4 +114,65 @@ const deleteOrder = async (req, res) => {
     }
 };
 
-module.exports = { myOrders, getOrders, resendOrderInvoice, updateOrderstatus, deleteOrder };
+const respondToAction = (res, error, fallback) => {
+    if (error instanceof OrderActionError) return res.status(error.statusCode).json({ message: error.message });
+    console.error(`${fallback}:`, error.message);
+    return res.status(500).json({ message: fallback });
+};
+
+const refundNote = (order) => {
+    if (!order.refund?.status) return '';
+    if (order.refund.status === 'refunded') return ` A refund of ₹${order.refund.amount} has been issued; it usually arrives in 5 to 7 working days.`;
+    return ' The refund could not be completed automatically; the team has been notified and will refund you.';
+};
+
+// POST /api/orders/:id/cancel — a customer cancels their own order before it ships; an admin
+// can cancel any order that hasn't shipped. The full amount is refunded and stock restored.
+const cancelOrder = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid order ID' });
+    const isAdmin = req.user.role === 'admin';
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (reason.length > 300) return res.status(400).json({ message: 'Keep the reason under 300 characters' });
+    try {
+        const order = await closeOrder({
+            orderId: req.params.id,
+            kind: 'cancel',
+            by: isAdmin ? 'admin' : 'customer',
+            // Admins may cancel anyone's order; customers only their own.
+            userId: isAdmin ? undefined : req.user._id,
+            reason,
+        });
+        return res.json({ message: `Order cancelled.${refundNote(order)}`, order });
+    } catch (error) {
+        return respondToAction(res, error, 'Unable to cancel the order');
+    }
+};
+
+// POST /api/orders/:id/return (admin) — the customer sent a shipped or delivered order back.
+// Refunds the full amount; `restock` puts the items back on sale (leave it off for opened items).
+const returnOrder = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid order ID' });
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (reason.length > 300) return res.status(400).json({ message: 'Keep the reason under 300 characters' });
+    try {
+        const order = await closeOrder({ orderId: req.params.id, kind: 'return', by: 'admin', reason, restock: req.body.restock === true });
+        return res.json({ message: `Order marked as returned.${refundNote(order)}`, order });
+    } catch (error) {
+        return respondToAction(res, error, 'Unable to mark the order as returned');
+    }
+};
+
+// POST /api/orders/:id/refund (admin) — retries a refund that failed.
+const retryOrderRefund = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid order ID' });
+    try {
+        const order = await retryRefund(req.params.id);
+        return order.refund.status === 'refunded'
+            ? res.json({ message: `Refund of ₹${order.refund.amount} issued.`, order })
+            : res.status(502).json({ message: `The refund failed again: ${order.refund.error || 'Razorpay refused it'}. Refund it in the Razorpay dashboard.`, order });
+    } catch (error) {
+        return respondToAction(res, error, 'Unable to retry the refund');
+    }
+};
+
+module.exports = { myOrders, getOrders, resendOrderInvoice, updateOrderstatus, deleteOrder, cancelOrder, returnOrder, retryOrderRefund };

@@ -226,6 +226,8 @@ function AdminDashboard() {
                 ["Pending", stats.orderStatus?.pending || 0, "bg-amber-500"],
                 ["Shipped", stats.orderStatus?.shipped || 0, "bg-brand-500"],
                 ["Delivered", stats.orderStatus?.delivered || 0, "bg-emerald-500"],
+                ["Cancelled", stats.orderStatus?.cancelled || 0, "bg-gray-400"],
+                ["Returned", stats.orderStatus?.returned || 0, "bg-gray-500"],
               ].map(([label, value, color]) => (
                 <div key={label}>
                   <div className="mb-2 flex justify-between text-sm"><span className="text-gray-600">{label}</span><span className="font-semibold text-gray-900">{value}</span></div>

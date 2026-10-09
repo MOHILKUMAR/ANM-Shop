@@ -7,6 +7,20 @@ import { formatInr } from "../money.js";
 
 const formatMoney = (amount) => `INR ${Number(amount || 0).toFixed(2)}`;
 const orderDate = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
+const statusBadge = {
+  cancelled: "bg-gray-100 text-gray-700",
+  returned: "bg-gray-100 text-gray-700",
+};
+
+// What happened to the money for a cancelled or returned order.
+function RefundNote({ refund }) {
+  if (!refund?.status) return null;
+  const amount = formatInr(refund.amount);
+  if (refund.status === "refunded") {
+    return <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">Refund of {amount} issued{refund.completedAt ? ` on ${orderDate(refund.completedAt)}` : ""}. It usually reaches your account in 5 to 7 working days.</p>;
+  }
+  return <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Refund of {amount} in progress. If it hasn't arrived after 7 working days, contact us on the Support page.</p>;
+}
 
 // Subtotal, shipping and discount for orders that have them; empty for older orders.
 const breakdownLines = (order) => (order.subtotalAmount === undefined || order.subtotalAmount === null ? [] : [
@@ -140,6 +154,9 @@ function OrderHistory() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [sendingInvoiceId, setSendingInvoiceId] = useState("");
+  const [cancellingId, setCancellingId] = useState("");
+  // A failed cancel or e-bill resend; shown above the list without hiding it.
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     if (!user?.token) return undefined;
@@ -163,7 +180,7 @@ function OrderHistory() {
 
   async function resendInvoice(orderId) {
     setSendingInvoiceId(orderId);
-    setError("");
+    setActionError("");
     setNotice("");
     try {
       const result = await apiRequest(`/orders/${orderId}/resend-invoice`, {
@@ -175,9 +192,37 @@ function OrderHistory() {
       ));
       setNotice(result.message);
     } catch (requestError) {
-      setError(requestError.message);
+      setActionError(requestError.message);
     } finally {
       setSendingInvoiceId("");
+    }
+  }
+
+  // Only orders that haven't shipped can be cancelled; the full amount is refunded.
+  async function cancelOrder(order) {
+    const code = `#${order._id.slice(-8).toUpperCase()}`;
+    if (!window.confirm(`Cancel order ${code}?
+
+You'll get a full refund of ${formatInr(order.totalAmount)} to your original payment method, usually within 5 to 7 working days.`)) return;
+    setCancellingId(order._id);
+    setActionError("");
+    setNotice("");
+    try {
+      const result = await apiRequest(`/orders/${order._id}/cancel`, {
+        method: "POST",
+        token: user.token,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      // Keep the item names already on screen; take the new status and refund from the reply.
+      setOrders((currentOrders) => currentOrders.map((item) => (item._id === order._id
+        ? { ...item, status: result.order.status, refund: result.order.refund, closedAt: result.order.closedAt }
+        : item)));
+      setNotice(result.message);
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setCancellingId("");
     }
   }
 
@@ -195,6 +240,7 @@ function OrderHistory() {
       <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-brand-700">Your account</p>
       <h1 className="mb-8 text-3xl font-bold text-gray-900">Order history</h1>
       {notice && <p className="mb-5 rounded-lg bg-green-50 p-4 text-green-800" role="status">{notice}</p>}
+      {actionError && <p className="mb-5 rounded-lg bg-red-50 p-4 text-red-700" role="alert">{actionError}</p>}
       {loading && <p className="py-12 text-center text-gray-600">Loading orders…</p>}
       {!loading && error && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
       {!loading && !error && orders.length === 0 && (
@@ -212,7 +258,7 @@ function OrderHistory() {
                   <h2 className="font-semibold text-gray-900">Order #{order._id.slice(-8).toUpperCase()}</h2>
                   <p className="mt-1 text-sm text-gray-500">{orderDate(order.createdAt)}</p>
                 </div>
-                <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium capitalize text-brand-800">{order.status}</span>
+                <span className={`rounded-full px-3 py-1 text-sm font-medium capitalize ${statusBadge[order.status] || "bg-brand-50 text-brand-800"}`}>{order.status}</span>
               </div>
               <ul className="divide-y divide-gray-100">
                 {order.items.map((item, index) => (
@@ -237,10 +283,16 @@ function OrderHistory() {
                   <span>{formatInr(order.totalAmount)}</span>
                 </div>
               </div>
+              <RefundNote refund={order.refund} />
               <p className="mt-3 text-sm text-gray-500">Delivering to {order.address?.city}, {order.address?.country}{order.address?.phone ? ` | ${order.address.phone}` : ""}</p>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
                 <p className="text-sm text-gray-500">{order.invoiceEmailSent ? "E-bill sent to your account email" : "E-bill email not confirmed"}</p>
                 <div className="flex flex-wrap gap-2">
+                  {order.status === "pending" && (
+                    <button className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60" type="button" disabled={cancellingId === order._id} onClick={() => cancelOrder(order)}>
+                      {cancellingId === order._id ? "Cancelling..." : "Cancel order"}
+                    </button>
+                  )}
                   <button className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800" type="button" onClick={() => downloadBill(order)}>
                     Download bill (PDF)
                   </button>

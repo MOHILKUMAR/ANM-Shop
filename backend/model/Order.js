@@ -30,7 +30,23 @@ const orderSchema = new mongoose.Schema(
         },
         paymentId : { type: String, unique: true, sparse: true },
         invoiceEmailSent : { type: Boolean, default: false },
-        status : {type: String, enum : ['pending', 'shipped', 'delivered'], default:'pending'},
+        // pending -> shipped -> delivered. A pending order can be cancelled (by the customer or an
+        // admin); a shipped or delivered one can be returned (admin). Both refund the full amount.
+        status : {type: String, enum : ['pending', 'shipped', 'delivered', 'cancelled', 'returned'], default:'pending'},
+        closedAt : { type: Date },
+        closedBy : { type: String, enum: ['customer', 'admin'] },
+        // Whether the items went back into stock when the order was cancelled or returned.
+        restocked : { type: Boolean },
+        // The refund for a cancelled or returned order (utils/orderRefunds.js).
+        refund : {
+            status: { type: String, enum: ['pending', 'refunded', 'failed'] },
+            amount: { type: Number },
+            reason: { type: String, maxlength: 300 },
+            razorpayRefundId: { type: String },
+            error: { type: String, maxlength: 300 },
+            requestedAt: { type: Date },
+            completedAt: { type: Date },
+        },
 
 
         

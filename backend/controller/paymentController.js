@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const Razorpay = require('razorpay');
 const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
 const Product = require('../model/Product');
@@ -10,10 +9,7 @@ const CouponUsage = require('../model/CouponUsage');
 const sendOrderInvoice = require('../utils/sendOrderInvoice');
 const { PricingError, priceCart, quoteForClient, describePaymentMethods } = require('../utils/pricing');
 
-const getRazorpay = () => new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+const { getRazorpay } = require('../utils/razorpayClient');
 
 const ADDRESS_LIMITS = { fullName: 120, street: 300, city: 100, postalCode: 24, country: 100, phone: 20 };
 // 8 to 15 digits once spaces, brackets, and dashes are removed, optionally starting with +.

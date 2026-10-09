@@ -1,13 +1,22 @@
-const { rateLimit } = require('express-rate-limit');
+const { rateLimit, MemoryStore } = require('express-rate-limit');
 
-const createLimiter = (limit, message, options = {}) => rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    message: { message },
-    ...options,
-});
+// Every limiter keeps its counts in memory (per API instance). The stores are kept so the API
+// tests can clear them between cases (resetRateLimits).
+const stores = [];
+const createLimiter = (limit, message, options = {}) => {
+    const store = new MemoryStore();
+    stores.push(store);
+    return rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit,
+        standardHeaders: 'draft-8',
+        legacyHeaders: false,
+        message: { message },
+        store,
+        ...options,
+    });
+};
+const resetRateLimits = () => Promise.all(stores.map((store) => store.resetAll()));
 
 const authLimiter = createLimiter(20, 'Too many account requests. Try again later.');
 const otpLimiter = createLimiter(8, 'Too many verification attempts. Try again later.');
@@ -44,4 +53,5 @@ const lookupLimiter = createLimiter(1500, 'Too many requests. Wait a few minutes
 
 module.exports = {
     authLimiter, otpLimiter, signupLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter, quoteLimiter, reviewLimiter, lookupLimiter,
+    resetRateLimits,
 };

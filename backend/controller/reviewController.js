@@ -95,7 +95,7 @@ const saveProductReview = async (req, res) => {
         if (!product) return res.status(404).json({ message: 'Beauty product not found' });
 
         // Every order is created after its payment succeeds, so any order counts as a purchase.
-        const verifiedBuyer = Boolean(await Order.exists({ user: req.user._id, 'items.productId': product._id }));
+        const verifiedBuyer = Boolean(await Order.exists({ user: req.user._id, 'items.productId': product._id, status: { $ne: 'cancelled' } }));
         const result = await Review.findOneAndUpdate(
             { product: product._id, user: req.user._id },
             { $set: { name: publicName(req.user.name), rating, comment, verifiedBuyer } },

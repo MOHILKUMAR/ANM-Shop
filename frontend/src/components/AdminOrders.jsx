@@ -3,9 +3,20 @@ import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
 import { formatInr } from "../money.js";
 
-const ORDER_STATUSES = ["pending", "shipped", "delivered"];
+// Statuses an admin sets by hand; cancelled and returned come from the actions below.
+const SHIPPING_STATUSES = ["pending", "shipped", "delivered"];
+const FILTERS = [...SHIPPING_STATUSES, "cancelled", "returned"];
 const day = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
 const shortCode = (id) => `#${id.slice(-8).toUpperCase()}`;
+
+function RefundStatus({ order }) {
+  const refund = order.refund;
+  if (!refund?.status) return null;
+  const amount = formatInr(refund.amount);
+  if (refund.status === "refunded") return <p className="mt-2 text-sm text-green-700">Refunded {amount}{refund.razorpayRefundId ? ` · ${refund.razorpayRefundId}` : ""}</p>;
+  if (refund.status === "failed") return <p className="mt-2 text-sm font-medium text-red-700">Refund of {amount} failed: {refund.error || "Razorpay refused it"}</p>;
+  return <p className="mt-2 text-sm text-amber-800">Refund of {amount} in progress</p>;
+}
 
 // Every customer order, 20 per page, filtered by status. `onChanged` lets the dashboard refresh
 // its statistics after a change here.
@@ -17,6 +28,9 @@ function AdminOrders({ token, onChanged }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [busyId, setBusyId] = useState("");
+  // The order whose return is being confirmed, and whether its items go back on sale.
+  const [returning, setReturning] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -53,6 +67,28 @@ function AdminOrders({ token, onChanged }) {
     setStatus(next);
   }
 
+  // Runs one order action; the server's message becomes the notice.
+  async function act(order, path, options = {}) {
+    setBusyId(order._id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiRequest(`/orders/${order._id}${path}`, {
+        method: "POST",
+        token,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(options),
+      });
+      setReturning(null);
+      reload(`${shortCode(order._id)}: ${result.message}`);
+    } catch (requestError) {
+      setError(`${shortCode(order._id)}: ${requestError.message}`);
+      if (requestError.status === 502) reload(); // the failed retry is recorded on the order
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function updateStatus(order, next) {
     setError("");
     try {
@@ -68,8 +104,13 @@ function AdminOrders({ token, onChanged }) {
     }
   }
 
+  function cancelOrder(order) {
+    if (!window.confirm(`Cancel order ${shortCode(order._id)} and refund ${formatInr(order.totalAmount)} to the customer?\n\nThe items go back into stock and the customer is emailed.`)) return;
+    act(order, "/cancel");
+  }
+
   async function deleteOrder(order) {
-    if (!window.confirm(`Delete order ${shortCode(order._id)}?\n\nThis removes the order record only. It does NOT refund the customer or restore stock. The payment record is kept.`)) return;
+    if (!window.confirm(`Delete order ${shortCode(order._id)}?\n\nThis removes the order record only. It does NOT refund the customer or restore stock. To refund, cancel it or mark it returned instead.`)) return;
     setError("");
     try {
       const result = await apiRequest(`/orders/${order._id}`, { method: "DELETE", token });
@@ -85,9 +126,12 @@ function AdminOrders({ token, onChanged }) {
 
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-gray-900">Customer orders{allCount === null ? "" : ` (${allCount})`}</h2>
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">Customer orders{allCount === null ? "" : ` (${allCount})`}</h2>
+        <p className="mt-1 text-sm text-gray-500">Cancelling (before shipping) or marking a return refunds the full amount through Razorpay and emails the customer.</p>
+      </div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
-        {[["", "All", allCount], ...ORDER_STATUSES.map((value) => [value, value, counts?.[value]])].map(([value, label, count]) => (
+        {[["", "All", allCount], ...FILTERS.map((value) => [value, value, counts?.[value]])].map(([value, label, count]) => (
           <button
             className={`rounded-full px-4 py-1.5 text-sm font-semibold capitalize ${status === value ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
             key={value || "all"}
@@ -105,21 +149,68 @@ function AdminOrders({ token, onChanged }) {
       {loading && <ListSkeleton rows={4} label="Loading orders" />}
       {!loading && data?.orders.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders here yet.</p>}
 
-      {!loading && data?.orders.map((order) => (
-        <article className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 md:flex-row md:items-center" key={order._id}>
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-gray-900">Order {shortCode(order._id)}</h3>
-            <p className="mt-1 text-sm text-gray-500">{order.user?.name || "Customer"} | {order.user?.email || ""} | {day(order.createdAt)}</p>
-            <p className="mt-2 text-sm text-gray-700">{order.items.map((item) => `${item.productId?.name || "Product"} x ${item.qty}`).join(", ")}</p>
-          </div>
-          <p className="font-semibold text-gray-900">{formatInr(order.totalAmount)}</p>
-          <label className="sr-only" htmlFor={`status-${order._id}`}>Order status</label>
-          <select className="rounded-lg border border-gray-300 px-3 py-2 capitalize" id={`status-${order._id}`} value={order.status} onChange={(event) => updateStatus(order, event.target.value)}>
-            {ORDER_STATUSES.map((value) => <option className="capitalize" key={value} value={value}>{value}</option>)}
-          </select>
-          <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
-        </article>
-      ))}
+      {!loading && data?.orders.map((order) => {
+        const closed = order.status === "cancelled" || order.status === "returned";
+        const busy = busyId === order._id;
+        return (
+          <article className="rounded-xl border border-gray-200 bg-white p-5" key={order._id}>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-gray-900">Order {shortCode(order._id)}</h3>
+                <p className="mt-1 text-sm text-gray-500">{order.user?.name || "Customer"} | {order.user?.email || ""} | {day(order.createdAt)}</p>
+                <p className="mt-2 text-sm text-gray-700">{order.items.map((item) => `${item.productId?.name || "Product"} x ${item.qty}`).join(", ")}</p>
+                {closed && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    <span className="capitalize">{order.status}</span>{order.closedAt ? ` on ${day(order.closedAt)}` : ""}{order.closedBy ? ` by the ${order.closedBy}` : ""}{order.restocked ? " · items back in stock" : order.restocked === false ? " · not restocked" : ""}{order.refund?.reason ? ` · “${order.refund.reason}”` : ""}
+                  </p>
+                )}
+                <RefundStatus order={order} />
+              </div>
+              <p className="font-semibold text-gray-900">{formatInr(order.totalAmount)}</p>
+              {closed ? (
+                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-sm font-medium capitalize text-gray-700">{order.status}</span>
+              ) : (
+                <>
+                  <label className="sr-only" htmlFor={`status-${order._id}`}>Order status</label>
+                  <select className="rounded-lg border border-gray-300 px-3 py-2 capitalize" id={`status-${order._id}`} value={order.status} disabled={busy} onChange={(event) => updateStatus(order, event.target.value)}>
+                    {SHIPPING_STATUSES.map((value) => <option className="capitalize" key={value} value={value}>{value}</option>)}
+                  </select>
+                </>
+              )}
+              <div className="flex flex-wrap gap-1">
+                {order.status === "pending" && (
+                  <button className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50" type="button" disabled={busy} onClick={() => cancelOrder(order)}>Cancel &amp; refund</button>
+                )}
+                {(order.status === "shipped" || order.status === "delivered") && (
+                  <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50" type="button" disabled={busy} onClick={() => setReturning({ id: order._id, restock: false, reason: "" })}>Mark returned</button>
+                )}
+                {order.refund?.status === "failed" && (
+                  <button className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50" type="button" disabled={busy} onClick={() => act(order, "/refund")}>{busy ? "Retrying..." : "Retry refund"}</button>
+                )}
+                <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
+              </div>
+            </div>
+
+            {returning?.id === order._id && (
+              <form className="mt-4 space-y-3 rounded-lg bg-gray-50 p-4" onSubmit={(event) => { event.preventDefault(); act(order, "/return", { restock: returning.restock, reason: returning.reason }); }}>
+                <p className="text-sm text-gray-700">Mark {shortCode(order._id)} as returned and refund {formatInr(order.totalAmount)} to the customer.</p>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={returning.restock} onChange={(event) => setReturning((current) => ({ ...current, restock: event.target.checked }))} />
+                  Put the items back in stock (only if unopened and resellable)
+                </label>
+                <div>
+                  <label className="mb-1 block text-sm text-gray-700" htmlFor={`return-reason-${order._id}`}>Reason (optional, for your records)</label>
+                  <input id={`return-reason-${order._id}`} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" maxLength={300} value={returning.reason} onChange={(event) => setReturning((current) => ({ ...current, reason: event.target.value }))} />
+                </div>
+                <div className="flex gap-2">
+                  <button className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-60" type="submit" disabled={busy}>{busy ? "Refunding..." : "Confirm return & refund"}</button>
+                  <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white" type="button" onClick={() => setReturning(null)}>Back</button>
+                </div>
+              </form>
+            )}
+          </article>
+        );
+      })}
 
       {pagination?.pages > 1 && (
         <nav className="flex items-center justify-center gap-4" aria-label="Order pages">

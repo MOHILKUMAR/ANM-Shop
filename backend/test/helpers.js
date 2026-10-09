@@ -120,6 +120,7 @@ const resetDb = async () => {
     await ensureDefaultCategories();
     sentEmails.length = 0;
     razorpay.reset();
+    await require('../middleware/rateLimiters').resetRateLimits();
 };
 
 const app = require('../app');

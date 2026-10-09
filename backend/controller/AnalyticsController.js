@@ -2,7 +2,8 @@ const User = require('../model/User');
 const Order = require('../model/Order');
 const Product = require('../model/Product');
 
-const PAID_ORDER_FILTER = { paymentId: { $exists: true, $ne: null } };
+// Paid orders that still count as sales: cancelled and returned orders were refunded.
+const PAID_ORDER_FILTER = { paymentId: { $exists: true, $ne: null }, status: { $nin: ['cancelled', 'returned'] } };
 // Days and months are counted in India time, where the store sells: an order at 1 Oct 01:30 IST
 // belongs to October even though it is still 30 Sep in UTC. India has no daylight saving.
 const STORE_TIME_ZONE = 'Asia/Kolkata';
@@ -97,7 +98,7 @@ const getAdminStats = async (req, res) => {
             return { month: key, revenue: totals?.revenue || 0, orders: totals?.orders || 0 };
         });
 
-        const orderStatus = { pending: 0, shipped: 0, delivered: 0 };
+        const orderStatus = { pending: 0, shipped: 0, delivered: 0, cancelled: 0, returned: 0 };
         statuses.forEach(({ _id, count }) => {
             if (Object.hasOwn(orderStatus, _id)) orderStatus[_id] = count;
         });
