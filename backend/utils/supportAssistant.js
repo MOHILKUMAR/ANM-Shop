@@ -4,7 +4,7 @@ const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
 const Product = require('../model/Product');
 const Ticket = require('../model/Ticket');
-const beautyCategories = require('../constants/beautyCategories');
+const { categoryNames } = require('./categories');
 const { shortCode, customerOrderFilter } = require('./orderLookup');
 const { TicketError, createTicket, statusLabels, TICKET_CATEGORIES } = require('./tickets');
 
@@ -74,7 +74,7 @@ const TOOLS = [
             type: 'object',
             properties: {
                 query: { type: 'string', description: 'Words from the product name or description, e.g. "vitamin c serum"' },
-                category: { type: 'string', enum: beautyCategories, description: 'Optional category filter' },
+                category: { type: 'string', description: 'Optional category filter, e.g. "Skincare" (an unknown name returns the list of categories)' },
             },
             additionalProperties: false,
         },
@@ -176,9 +176,10 @@ const toolHandlers = {
     },
 
     async search_products(input) {
-        const filter = { category: { $in: beautyCategories } };
+        const categories = await categoryNames();
+        const filter = { category: { $in: categories } };
         if (input.category !== undefined) {
-            if (!beautyCategories.includes(input.category)) throw new ToolInputError('Unknown category');
+            if (!categories.includes(input.category)) throw new ToolInputError(`Unknown category. The categories are: ${categories.join(', ')}`);
             filter.category = input.category;
         }
         if (input.query !== undefined) {
@@ -207,7 +208,7 @@ const toolHandlers = {
         if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 10) {
             throw new ToolInputError('quantity must be a whole number from 1 to 10');
         }
-        const product = await Product.findOne({ _id: input.product_id, category: { $in: beautyCategories } })
+        const product = await Product.findOne({ _id: input.product_id, category: { $in: await categoryNames() } })
             .select('name price stock category description imageUrls').lean();
         if (!product) return { added: false, note: 'That product is no longer available.' };
         if (product.stock < 1) return { added: false, note: `${product.name} is out of stock.` };

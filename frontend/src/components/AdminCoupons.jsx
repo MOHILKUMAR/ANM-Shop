@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
-import { beautyCategories } from "../data/beautyCategories.js";
+import { useCategories } from "../useCategories.js";
 import { formatInr } from "../money.js";
 
 const day = (date) => (date ? new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" }) : null);
@@ -73,6 +73,7 @@ function Field({ label, htmlFor, hint, children, className = "" }) {
 }
 
 function AdminCoupons({ token }) {
+  const { categories: shopCategories } = useCategories();
   const [coupons, setCoupons] = useState(null);
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -242,7 +243,7 @@ function AdminCoupons({ token }) {
           <legend className="mb-1 text-sm font-medium text-gray-700">Applicable categories</legend>
           <p className="mb-2 text-xs text-gray-500">None selected means all products.</p>
           <div className="flex flex-wrap gap-2">
-            {beautyCategories.map((category) => (
+            {shopCategories.map((category) => (
               <button className={`rounded-full border px-3 py-1 text-xs font-medium ${form.applicableCategories.includes(category.name) ? "border-brand-600 bg-brand-50 text-brand-800" : "border-gray-300 text-gray-600"}`} type="button" key={category.name} aria-pressed={form.applicableCategories.includes(category.name)} onClick={() => toggleIn("applicableCategories", category.name)}>
                 {category.name}
               </button>

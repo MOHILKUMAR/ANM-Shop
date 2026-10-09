@@ -7,21 +7,21 @@ import AdminUsers from "../components/AdminUsers.jsx";
 import AdminTickets from "../components/AdminTickets.jsx";
 import AdminCoupons from "../components/AdminCoupons.jsx";
 import AdminReviews from "../components/AdminReviews.jsx";
+import AdminCategories from "../components/AdminCategories.jsx";
 import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
-import { beautyCategories } from "../data/beautyCategories.js";
+import { useCategories } from "../useCategories.js";
 import { productImage } from "../imageUrl.js";
 import { usePageMeta } from "../usePageMeta.js";
 import { formatInr } from "../money.js";
 
-// The shared list holds { name, description, icon } for the home page; the admin form needs names.
-const categoryNames = beautyCategories.map((category) => category.name);
-
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // the server's upload limit
-const emptyProduct = { name: "", description: "", price: "", category: "Skincare", stock: "" };
+const emptyProduct = { name: "", description: "", price: "", category: "", stock: "" };
 
 function AdminDashboard() {
   const { user } = useContext(AuthContext);
   usePageMeta({ title: "Admin dashboard", noindex: true });
+  const { categories } = useCategories();
+  const categoryNames = categories.map((category) => category.name);
   const [stats, setStats] = useState(null);
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState({ page: 1, pages: 1, total: 0 });
@@ -165,7 +165,8 @@ function AdminDashboard() {
       name: item.name,
       description: item.description,
       price: String(item.price),
-      category: categoryNames.includes(item.category) ? item.category : "Skincare",
+      // A product in a deleted or renamed category must be given a current one before saving.
+      category: categoryNames.includes(item.category) ? item.category : "",
       stock: String(item.stock),
     });
     setImage(null);
@@ -272,7 +273,7 @@ function AdminDashboard() {
       )}
 
       <div className="mb-6 flex gap-3 overflow-x-auto border-b border-gray-200">
-        {["products", "orders", "coupons", "reviews", "tickets", "users", "search"].map((item) => (
+        {["products", "categories", "orders", "coupons", "reviews", "tickets", "users", "search"].map((item) => (
           <button className={`border-b-2 px-4 py-3 font-semibold capitalize ${tab === item ? "border-brand-600 text-brand-800" : "border-transparent text-gray-500"}`} key={item} type="button" onClick={() => setTab(item)}>{item}</button>
         ))}
       </div>
@@ -305,6 +306,7 @@ function AdminDashboard() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="product-category">Category</label>
               <select className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand-500" id="product-category" required value={product.category} onChange={(event) => setProduct((current) => ({ ...current, category: event.target.value }))}>
+                <option value="" disabled>Choose a category</option>
                 {categoryNames.map((category) => <option value={category} key={category}>{category}</option>)}
               </select>
             </div>
@@ -351,6 +353,8 @@ function AdminDashboard() {
         <AdminCoupons token={user.token} />
       ) : tab === "reviews" ? (
         <AdminReviews token={user.token} />
+      ) : tab === "categories" ? (
+        <AdminCategories token={user.token} />
       ) : (
         <section className="space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Customer orders{loadingData ? "" : ` (${orders.length})`}</h2>

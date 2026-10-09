@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed": "node seed.js",
-    "promote-admin": "node promoteAdmin.js"
+    "promote-admin": "node promoteAdmin.js",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
   },
   "keywords": [
     "e-commerce"
@@ -30,6 +31,8 @@
     "razorpay": "^2.9.6"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "mongodb-memory-server": "^11.3.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1"
   }
 }

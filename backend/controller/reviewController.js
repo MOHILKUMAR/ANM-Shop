@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Product = require('../model/Product');
 const Review = require('../model/Review');
 const Order = require('../model/Order');
-const beautyCategories = require('../constants/beautyCategories');
+const { categoryNames } = require('../utils/categories');
 const { publicName, refreshProductRating } = require('../utils/reviews');
 
 const { RATINGS } = Review;
@@ -16,8 +16,8 @@ const pageParams = (query, defaultLimit, maxLimit) => {
     return page >= 1 ? { page, limit } : null;
 };
 
-const findShopProduct = (id) => (mongoose.isValidObjectId(id)
-    ? Product.findOne({ _id: id, category: { $in: beautyCategories } }).select('numReviews ratingCounts')
+const findShopProduct = async (id) => (mongoose.isValidObjectId(id)
+    ? Product.findOne({ _id: id, category: { $in: await categoryNames() } }).select('numReviews ratingCounts')
     : null);
 
 const summaryOf = (product) => ({

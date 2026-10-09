@@ -4,11 +4,11 @@ import { apiRequest } from "../api.js";
 import ProductCard from "../components/ProductCard.jsx";
 import { ProductGridSkeleton, Shimmer } from "../components/Skeletons.jsx";
 import { usePageMeta } from "../usePageMeta.js";
-import { beautyCategories } from "../data/beautyCategories.js";
+import { useCategories } from "../useCategories.js";
 
 // What search results show for the shop, or for one category of it.
-const categoryDescription = (category) => {
-  const match = beautyCategories.find((item) => item.name === category);
+const categoryDescription = (category, shopCategories) => {
+  const match = shopCategories.find((item) => item.name === category);
   return match
     ? `${match.description} Shop ${match.name.toLowerCase()} at ANM-Shop with secure checkout and free shipping above ₹499.`
     : "Browse ANM-Shop's beauty collection: skincare, face and eye makeup, lip colour, haircare, body care, and beauty tools. Free shipping above ₹499.";
@@ -24,9 +24,10 @@ function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
   const category = searchParams.get("category") || "";
   const page = Number(searchParams.get("page")) || 1;
+  const { categories: shopCategories } = useCategories();
   usePageMeta({
     title: category || "Shop skincare, makeup & haircare",
-    description: categoryDescription(category),
+    description: categoryDescription(category, shopCategories),
     path: category ? `/shop?category=${encodeURIComponent(category)}` : "/shop",
   });
 

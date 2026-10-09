@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
+const { categoryNames } = require('../utils/categories');
 const Coupon = require('../model/Coupon');
 const CouponUsage = require('../model/CouponUsage');
 const Product = require('../model/Product');
 const User = require('../model/User');
-const beautyCategories = require('../constants/beautyCategories');
 const { couponStatus, describeCoupon } = require('../utils/pricing');
 
 const { DISCOUNT_TYPES, PAYMENT_METHODS } = Coupon;
@@ -85,7 +85,8 @@ const parseCoupon = async (body) => {
     data.applicableProducts = productIds;
 
     const categories = [...new Set(list(body.applicableCategories, 'Categories', 20))];
-    if (categories.some((category) => !beautyCategories.includes(category))) throw new CouponInputError('Unknown category selected');
+    const shopCategories = await categoryNames();
+    if (categories.some((category) => !shopCategories.includes(category))) throw new CouponInputError('Unknown category selected');
     data.applicableCategories = categories;
 
     const emails = [...new Set(list(body.applicableUserEmails, 'Customers')

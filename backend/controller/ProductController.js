@@ -2,8 +2,7 @@ const mongoose = require('mongoose');
 const Product = require('../model/Product');
 const Review = require('../model/Review');
 const cloudinary = require('../config/cloudinary');
-const beautyCategories = require('../constants/beautyCategories');
-const beautyCategorySet = new Set(beautyCategories);
+const { categoryNames } = require('../utils/categories');
 
 const MAX_PRICE = 100000000;
 const MAX_STOCK = 1000000;
@@ -40,9 +39,6 @@ const parseProductFields = (body, partial = false) => {
         if (!normalized || normalized.length > maxLength) {
             return { error: `${field} is required and must be at most ${maxLength} characters` };
         }
-        if (field === 'category' && !beautyCategorySet.has(normalized)) {
-            return { error: `category must be one of: ${beautyCategories.join(', ')}` };
-        }
         result[field] = normalized;
     }
 
@@ -50,6 +46,13 @@ const parseProductFields = (body, partial = false) => {
         return { error: 'Name, description, price, category, and stock are required' };
     }
     return { data: result };
+};
+
+// The category must be one of the shop's categories (managed by admins).
+const checkCategory = async (data) => {
+    if (data.category === undefined) return null;
+    const names = await categoryNames();
+    return names.includes(data.category) ? null : `category must be one of: ${names.join(', ')}`;
 };
 
 const uploadProductImage = (file) => new Promise((resolve, reject) => {
@@ -80,26 +83,26 @@ const getProducts = async (req, res) => {
         return res.status(400).json({ message: 'Invalid product-list filters' });
     }
 
-    if (category && !beautyCategorySet.has(category)) {
-        return res.status(400).json({ message: 'Choose a beauty category' });
-    }
-
-    const filter = { category: category || { $in: beautyCategories } };
-    if (search) {
-        const safeSearch = new RegExp(escapeRegex(search), 'i');
-        filter.$or = [{ name: safeSearch }, { description: safeSearch }];
-    }
-
     try {
-        const [items, total, categories] = await Promise.all([
+        const categories = await categoryNames();
+        if (category && !categories.includes(category)) {
+            return res.status(400).json({ message: 'Choose one of the shop’s categories' });
+        }
+
+        const filter = { category: category || { $in: categories } };
+        if (search) {
+            const safeSearch = new RegExp(escapeRegex(search), 'i');
+            filter.$or = [{ name: safeSearch }, { description: safeSearch }];
+        }
+
+        const [items, total] = await Promise.all([
             Product.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
             Product.countDocuments(filter),
-            Promise.resolve(beautyCategories),
         ]);
         return res.json({
             items,
-            // A sorted copy: sort() works in place and the list is shared with the rest of the app.
-            categories: [...categories].sort((left, right) => left.localeCompare(right)),
+            // In the order admins set in the Categories tab.
+            categories,
             pagination: { page, limit, total, pages: Math.ceil(total / limit) },
         });
     } catch (error) {
@@ -114,8 +117,8 @@ const getProductById = async (req, res) => {
     }
 
     try {
-        const product = await Product.findById(req.params.id);
-        if (!product || !beautyCategorySet.has(product.category)) {
+        const [product, categories] = await Promise.all([Product.findById(req.params.id), categoryNames()]);
+        if (!product || !categories.includes(product.category)) {
             return res.status(404).json({ message: 'Beauty product not found' });
         }
         return res.json(product);
@@ -133,7 +136,7 @@ const lookupProducts = async (req, res) => {
         return res.status(400).json({ message: 'Send up to 50 product IDs' });
     }
     try {
-        const items = await Product.find({ _id: { $in: ids }, category: { $in: beautyCategories } })
+        const items = await Product.find({ _id: { $in: ids }, category: { $in: await categoryNames() } })
             .select('name price stock category imageUrls').lean();
         return res.json({ items });
     } catch (error) {
@@ -149,13 +152,14 @@ const getAdminProducts = async (req, res) => {
     if (page < 1) return res.status(400).json({ message: 'Invalid page number' });
 
     try {
-        const [items, total] = await Promise.all([
+        const [items, total, categories] = await Promise.all([
             Product.find({}).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
             Product.countDocuments({}),
+            categoryNames(),
         ]);
         return res.json({
             items,
-            categories: beautyCategories,
+            categories,
             pagination: { page, limit, total, pages: Math.ceil(total / limit) },
         });
     } catch (error) {
@@ -167,6 +171,8 @@ const getAdminProducts = async (req, res) => {
 const createProduct = async (req, res) => {
     const { data, error } = parseProductFields(req.body);
     if (error) return res.status(400).json({ message: error });
+    const categoryError = await checkCategory(data);
+    if (categoryError) return res.status(400).json({ message: categoryError });
     if (!req.file) return res.status(400).json({ message: 'A JPEG, PNG, or WebP image is required' });
 
     try {
@@ -185,6 +191,8 @@ const updateProduct = async (req, res) => {
     }
     const { data, error } = parseProductFields(req.body, true);
     if (error) return res.status(400).json({ message: error });
+    const categoryError = await checkCategory(data);
+    if (categoryError) return res.status(400).json({ message: categoryError });
     if (Object.keys(data).length === 0 && !req.file) {
         return res.status(400).json({ message: 'Provide at least one field or a replacement image' });
     }
