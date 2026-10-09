@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/csp-hash.mjs --check && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "csp-hash": "node scripts/csp-hash.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
