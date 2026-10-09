@@ -4,13 +4,7 @@ frontend/dist/
 backend/uploads/*
 !backend/uploads/.gitkeep
 
-# Local environment variables (keep example templates)
-backend/.env
+# Local environment variables (keep the example templates)
+.env
 .env.*
 !.env.example
-backend/.env
-backend/.env.*
-!backend/.env.example
-frontend/.env
-frontend/.env.*
-frontend/.env.example
