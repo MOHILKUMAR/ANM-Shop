@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
+import { formatInr } from "../money.js";
 import AuthContext from "./AuthContext.js";
 import CartContext from "./CartContext.js";
 
@@ -57,7 +58,6 @@ function loadCart(owner) {
   return cart;
 }
 
-const inr = (amount) => Number(amount).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const isProductId = (id) => /^[a-f\d]{24}$/i.test(String(id));
 
 // The cart with the shop's current name, price, and stock for each product that was looked up
@@ -85,7 +85,7 @@ function describeChanges(cart, fresh, checked) {
       notes.push(`${product.name} is sold out, so it was removed from your cart.`);
     } else {
       if (item.quantity > product.stock) notes.push(`Only ${product.stock} of ${product.name} left, so your quantity was lowered.`);
-      if (Number(product.price) !== Number(item.price)) notes.push(`${product.name} now costs ${inr(product.price)} (was ${inr(item.price)}).`);
+      if (Number(product.price) !== Number(item.price)) notes.push(`${product.name} now costs ${formatInr(product.price)} (was ${formatInr(item.price)}).`);
     }
   }
   return notes;
@@ -125,8 +125,11 @@ export function CartProvider({ children }) {
       ? await apiRequest(`/products/lookup?ids=${ids.join(",")}`)
       : { items: [] };
     const fresh = new Map(items.map((product) => [String(product._id), product]));
+    // Describe the cart as it is now, not as it was when the lookup started, so a quantity
+    // changed while waiting still gets its "only N left" note.
+    const notes = describeChanges(cartRef.current, fresh, checked);
     setCart((current) => withCurrentDetails(current, fresh, checked));
-    return describeChanges(snapshot, fresh, checked);
+    return notes;
   }, []);
 
   function addToCart(product) {

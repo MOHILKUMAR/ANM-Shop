@@ -186,6 +186,8 @@ const priceCart = async ({ user, items, couponCode }) => {
         lines,
         subtotalPaise,
         shippingPaise,
+        // The shipping fee before any coupon, for the order's price breakdown.
+        shippingBasePaise: shippingBase,
         // What the coupon saved in total, shipping included, for display.
         savingsPaise: discountPaise + (shippingBase - shippingPaise),
         discountPaise,

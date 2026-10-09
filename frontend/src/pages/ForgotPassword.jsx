@@ -10,8 +10,7 @@ function ForgotPassword() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [formStartedAt] = useState(() => Date.now());
-  const [website, setWebsite] = useState("");
+  const [leaveBlank, setLeaveBlank] = useState("");
 
   async function requestLink(event) {
     event.preventDefault();
@@ -22,7 +21,7 @@ function ForgotPassword() {
       const result = await apiRequest("/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, website, formStartedAt }),
+        body: JSON.stringify({ email, leaveBlank }),
       });
       setNotice(result.message);
     } catch (requestError) {
@@ -44,7 +43,7 @@ function ForgotPassword() {
             <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="forgot-email">Email</label>
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id="forgot-email" type="email" autoComplete="email" maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} />
           </div>
-          <Honeypot value={website} onChange={setWebsite} />
+          <Honeypot value={leaveBlank} onChange={setLeaveBlank} />
           {notice && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800" role="status">{notice} Check your spam folder if it doesn't arrive.</p>}
           {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
           <button className="gradient-action w-full justify-center py-3 disabled:cursor-wait disabled:opacity-60" type="submit" disabled={submitting}>

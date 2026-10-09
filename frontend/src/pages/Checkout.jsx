@@ -5,8 +5,8 @@ import AuthContext from "../context/AuthContext.js";
 import CartContext from "../context/CartContext.js";
 import { Shimmer } from "../components/Skeletons.jsx";
 import { usePageMeta } from "../usePageMeta.js";
+import { formatInr as money } from "../money.js";
 
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const methodLabels = { upi: "UPI", card: "Card", netbanking: "Net banking", wallet: "Wallet" };
 // Same rule as the server: 8 to 15 digits once spaces, brackets, and dashes are removed.
 const isValidPhone = (phone) => /^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s()-]/g, ""));

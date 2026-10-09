@@ -22,7 +22,6 @@ function VerifyEmail() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
-  const [formStartedAt] = useState(() => Date.now());
 
   async function verifyCode(event) {
     event.preventDefault();
@@ -50,7 +49,7 @@ function VerifyEmail() {
       const result = await apiRequest("/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, formStartedAt }),
+        body: JSON.stringify({ email }),
       });
       setNotice(result.message);
     } catch (requestError) {

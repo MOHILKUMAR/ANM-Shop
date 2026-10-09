@@ -81,7 +81,7 @@ const createdOrder = async (req, res) => {
             // subtotal + shipping - discount = amount: shipping is the fee before any coupon and
             // the discount is everything the coupon saved, waived shipping included.
             subtotalPaise: priced.subtotalPaise,
-            shippingPaise: priced.shippingPaise + priced.savingsPaise - priced.discountPaise,
+            shippingPaise: priced.shippingBasePaise,
             discountPaise: priced.savingsPaise,
             ...(priced.coupon ? {
                 coupon: { id: priced.coupon._id, code: priced.coupon.code },

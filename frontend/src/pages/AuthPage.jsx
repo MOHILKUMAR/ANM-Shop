@@ -19,7 +19,7 @@ function AuthPage({ register = false }) {
   // Spam protection (see backend/middleware/spamGuard.js): when the form was opened, and a
   // hidden field only bots fill in.
   const [formStartedAt] = useState(() => Date.now());
-  const [website, setWebsite] = useState("");
+  const [leaveBlank, setLeaveBlank] = useState("");
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -38,7 +38,7 @@ function AuthPage({ register = false }) {
       const result = await apiRequest(register ? "/auth/register" : "/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(register ? { name: name.trim(), email, password, website, formStartedAt } : { email, password }),
+        body: JSON.stringify(register ? { name: name.trim(), email, password, leaveBlank, formElapsedMs: Date.now() - formStartedAt } : { email, password }),
       });
       if (register) {
         navigate("/verify-email", {
@@ -126,7 +126,7 @@ function AuthPage({ register = false }) {
               </p>
             )}
           </div>
-          {register && <Honeypot value={website} onChange={setWebsite} />}
+          {register && <Honeypot value={leaveBlank} onChange={setLeaveBlank} />}
           {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
           <button className="gradient-action w-full justify-center py-3 disabled:cursor-wait disabled:opacity-60" type="submit" disabled={submitting}>
             {submitting ? "Please wait…" : register ? "Create account" : "Sign in"}

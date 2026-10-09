@@ -7,8 +7,7 @@ import ProductReviews from "../components/ProductReviews.jsx";
 import { overallRating, reviewCountLabel } from "../data/reviews.js";
 import { productImage } from "../imageUrl.js";
 import { usePageMeta } from "../usePageMeta.js";
-
-const formatInr = (amount) => Number(amount).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+import { formatInr } from "../money.js";
 
 function ProductDetail() {
   const { id } = useParams();

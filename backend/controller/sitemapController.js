@@ -4,7 +4,11 @@ const beautyCategories = require('../constants/beautyCategories');
 // The storefront's address; FRONTEND_URL may list several origins and the first is the main one.
 const storefrontUrl = () => (process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim().replace(/\/+$/, '');
 const escapeXml = (value) => String(value).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
-const day = (date) => new Date(date).toISOString().slice(0, 10);
+// YYYY-MM-DD, or null for a missing or invalid date (e.g. a product imported without one).
+const day = (date) => {
+    const parsed = date ? new Date(date) : null;
+    return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+};
 
 // Public pages search engines should know about. Account, cart, checkout, and admin pages are
 // left out (robots.txt keeps crawlers away from them).

@@ -7,7 +7,7 @@ const {
 const {protect  } = require('../middleware/authMiddleware');
 const { admin } = require('../middleware/adminMiddleware');
 const { authLimiter, otpLimiter, signupLimiter } = require('../middleware/rateLimiters');
-const { spamGuard } = require('../middleware/spamGuard');
+const { spamGuard, SIGNUP_MIN_FILL_MS } = require('../middleware/spamGuard');
 
 // What a person would have been told, so a stopped bot can't tell the difference.
 const fakeSignup = (req, res) => res.status(201).json({
@@ -18,8 +18,7 @@ const fakeSignup = (req, res) => res.status(201).json({
 const fakeResetRequest = (req, res) => res.json({ message: 'If an account exists for this email, a password reset link is on its way. It expires in 30 minutes.' });
 const fakeResend = (req, res) => res.json({ message: 'If an unverified account exists for this email, a code will be sent.' });
 
-
-router.post("/register", authLimiter, signupLimiter, spamGuard(fakeSignup), registerUser);
+router.post("/register", authLimiter, signupLimiter, spamGuard(fakeSignup, { minFillMs: SIGNUP_MIN_FILL_MS }), registerUser);
 router.post("/verify-email", otpLimiter, verifyEmail);
 router.post("/resend-verification", otpLimiter, spamGuard(fakeResend), resendVerificationOtp);
 router.post("/login", authLimiter, loginUser);
