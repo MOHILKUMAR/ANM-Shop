@@ -21,9 +21,11 @@ const MIN_CHARGE_PAISE = 100; // Razorpay's minimum payment is ₹1
 const PAYMENT_METHOD_LABELS = { upi: 'UPI', card: 'card', netbanking: 'net banking', wallet: 'wallet' };
 
 class PricingError extends Error {
-    constructor(message, statusCode = 400) {
+    // `details` is sent to the browser with the message, e.g. which products are gone.
+    constructor(message, statusCode = 400, details = {}) {
         super(message);
         this.statusCode = statusCode;
+        this.details = details;
     }
 }
 
@@ -46,7 +48,15 @@ const loadCartLines = async (items) => {
     }
 
     const products = await Product.find({ _id: { $in: [...quantities.keys()] }, category: { $in: beautyCategories } });
-    if (products.length !== quantities.size) throw new PricingError('One or more products are no longer available');
+    if (products.length !== quantities.size) {
+        const found = new Set(products.map((product) => product._id.toString()));
+        const unavailableProductIds = [...quantities.keys()].filter((id) => !found.has(id));
+        throw new PricingError(
+            `${unavailableProductIds.length === 1 ? 'An item' : 'Some items'} in your cart ${unavailableProductIds.length === 1 ? 'is' : 'are'} no longer sold. Open your cart to remove ${unavailableProductIds.length === 1 ? 'it' : 'them'}.`,
+            409,
+            { unavailableProductIds },
+        );
+    }
 
     return products.map((product) => {
         const qty = quantities.get(product._id.toString());
@@ -176,6 +186,8 @@ const priceCart = async ({ user, items, couponCode }) => {
         lines,
         subtotalPaise,
         shippingPaise,
+        // The shipping fee before any coupon, for the order's price breakdown.
+        shippingBasePaise: shippingBase,
         // What the coupon saved in total, shipping included, for display.
         savingsPaise: discountPaise + (shippingBase - shippingPaise),
         discountPaise,

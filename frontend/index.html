@@ -1,10 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-IN">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ANM-Shop – Skincare, Makeup &amp; Haircare Online in India</title>
+    <!-- Defaults for link previews and search results. Pages update the title, description,
+         and links as you navigate (src/usePageMeta.js); WhatsApp, Facebook, LinkedIn, and X
+         don't run JavaScript, so they always show these. Change the domain here if it moves. -->
+    <meta name="description" content="Shop skincare, makeup, haircare, and body essentials at ANM-Shop. Secure Razorpay checkout, free shipping on orders above ₹499, and easy returns." />
+    <link rel="canonical" href="https://anm-shop.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ANM-Shop" />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:title" content="ANM-Shop – Skincare, Makeup &amp; Haircare Online in India" />
+    <meta property="og:description" content="Shop skincare, makeup, haircare, and body essentials at ANM-Shop. Secure Razorpay checkout, free shipping on orders above ₹499, and easy returns." />
+    <meta property="og:url" content="https://anm-shop.vercel.app/" />
+    <meta property="og:image" content="https://anm-shop.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ANM-Shop: beauty for your everyday rituals" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ANM-Shop – Skincare, Makeup &amp; Haircare Online in India" />
+    <meta name="twitter:description" content="Shop skincare, makeup, haircare, and body essentials at ANM-Shop. Secure Razorpay checkout, free shipping on orders above ₹499, and easy returns." />
+    <meta name="twitter:image" content="https://anm-shop.vercel.app/og-image.png" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/svg+xml" href="/anm-shop-favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#35232E" />
-    <meta name="description" content="Shop quality products at great prices with ANM-Shop." />
+    <!-- Open connections to the API and image hosts while the app is still loading, so the first
+         product request doesn't wait for DNS and TLS. Update the API address if it moves. -->
+    <link rel="preconnect" href="https://anm-shop-api.onrender.com" crossorigin />
+    <link rel="preconnect" href="https://placehold.co" />
+    <link rel="dns-prefetch" href="https://res.cloudinary.com" />
     <script>
       try {
         if (localStorage.getItem("anmShopTheme") === "dark") {
@@ -12,11 +40,10 @@
         }
       } catch {}
     </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="./src/index.css" rel="stylesheet">
-    <title>ANM-Shop</title>
   </head>
   <body>
+    <noscript>ANM-Shop needs JavaScript to show products and take orders. Please turn it on and reload the page.</noscript>
     <div id="root"></div>
     <script type="module" src="./src/index.jsx"></script>
   </body>

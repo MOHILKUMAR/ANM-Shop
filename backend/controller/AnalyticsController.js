@@ -3,6 +3,12 @@ const Order = require('../model/Order');
 const Product = require('../model/Product');
 
 const PAID_ORDER_FILTER = { paymentId: { $exists: true, $ne: null } };
+// Days and months are counted in India time, where the store sells: an order at 1 Oct 01:30 IST
+// belongs to October even though it is still 30 Sep in UTC. India has no daylight saving.
+const STORE_TIME_ZONE = 'Asia/Kolkata';
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+// The moment a calendar date in India starts (Date.UTC normalises overflowing days and months).
+const istStart = (year, month, day = 1) => new Date(Date.UTC(year, month, day) - IST_OFFSET_MS);
 const moneyTotals = async (from, to) => {
     const [result] = await Order.aggregate([
         { $match: { ...PAID_ORDER_FILTER, createdAt: { $gte: from, $lt: to } } },
@@ -13,12 +19,14 @@ const moneyTotals = async (from, to) => {
 
 const getAdminStats = async (req, res) => {
     try {
-        const now = new Date();
-        const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-        const previousMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-        const salesStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6));
-        const monthsStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+        // Today's date in India, read from a clock shifted to IST.
+        const india = new Date(Date.now() + IST_OFFSET_MS);
+        const [year, month, date] = [india.getUTCFullYear(), india.getUTCMonth(), india.getUTCDate()];
+        const currentMonthStart = istStart(year, month);
+        const nextMonthStart = istStart(year, month + 1);
+        const previousMonthStart = istStart(year, month - 1);
+        const salesStart = istStart(year, month, date - 6);
+        const monthsStart = istStart(year, month - 5);
 
         const [totalUser, totalOrder, totalProduct, allTime, thisMonth, lastMonth, dailySales, monthlySales, statuses, topProducts, lowStockCount] = await Promise.all([
             User.countDocuments({ role: 'user' }),
@@ -33,7 +41,7 @@ const getAdminStats = async (req, res) => {
             Order.aggregate([
                 { $match: { ...PAID_ORDER_FILTER, createdAt: { $gte: salesStart, $lt: nextMonthStart } } },
                 { $group: {
-                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } },
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: STORE_TIME_ZONE } },
                     revenue: { $sum: '$totalAmount' },
                     orders: { $sum: 1 },
                 } },
@@ -42,7 +50,7 @@ const getAdminStats = async (req, res) => {
             Order.aggregate([
                 { $match: { ...PAID_ORDER_FILTER, createdAt: { $gte: monthsStart, $lt: nextMonthStart } } },
                 { $group: {
-                    _id: { $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: 'UTC' } },
+                    _id: { $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: STORE_TIME_ZONE } },
                     revenue: { $sum: '$totalAmount' },
                     orders: { $sum: 1 },
                 } },
@@ -75,21 +83,18 @@ const getAdminStats = async (req, res) => {
         ]);
 
         const dailyMap = new Map(dailySales.map((day) => [day._id, day]));
+        // Keys are India calendar dates ("2026-10-04") and months ("2026-10").
         const salesLast7Days = Array.from({ length: 7 }, (_, index) => {
-            const date = new Date(salesStart);
-            date.setUTCDate(date.getUTCDate() + index);
-            const key = date.toISOString().slice(0, 10);
+            const key = new Date(Date.UTC(year, month, date - 6 + index)).toISOString().slice(0, 10);
             const day = dailyMap.get(key);
             return { date: key, revenue: day?.revenue || 0, orders: day?.orders || 0 };
         });
 
-        const monthMap = new Map(monthlySales.map((month) => [month._id, month]));
+        const monthMap = new Map(monthlySales.map((entry) => [entry._id, entry]));
         const revenueByMonth = Array.from({ length: 6 }, (_, index) => {
-            const date = new Date(monthsStart);
-            date.setUTCMonth(date.getUTCMonth() + index);
-            const key = date.toISOString().slice(0, 7);
-            const month = monthMap.get(key);
-            return { month: key, revenue: month?.revenue || 0, orders: month?.orders || 0 };
+            const key = new Date(Date.UTC(year, month - 5 + index, 1)).toISOString().slice(0, 7);
+            const totals = monthMap.get(key);
+            return { month: key, revenue: totals?.revenue || 0, orders: totals?.orders || 0 };
         });
 
         const orderStatus = { pending: 0, shipped: 0, delivered: 0 };

@@ -4,6 +4,7 @@ import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
 import { RatingBadge } from "./ProductReviews.jsx";
 import { RATING_OPTIONS } from "../data/reviews.js";
+import { productImage } from "../imageUrl.js";
 
 const day = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
 const statusTabs = [["all", "All"], ["visible", "Visible"], ["hidden", "Hidden"]];
@@ -123,7 +124,7 @@ function AdminReviews({ token }) {
       {!loading && data?.reviews.map((review) => (
         <article className={`flex flex-col gap-4 rounded-xl border bg-white p-4 sm:flex-row ${review.hidden ? "border-amber-300" : "border-gray-200"}`} key={review._id}>
           {review.product?.imageUrls
-            ? <img className="h-16 w-16 shrink-0 rounded-lg bg-gray-50 object-contain" src={review.product.imageUrls} alt="" />
+            ? <img className="h-16 w-16 shrink-0 rounded-lg bg-gray-50 object-contain" src={productImage(review.product.imageUrls, 64)} alt="" width="64" height="64" loading="lazy" decoding="async" />
             : <div className="h-16 w-16 shrink-0 rounded-lg bg-gray-100" />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -139,7 +140,7 @@ function AdminReviews({ token }) {
             </p>
             {review.comment
               ? <p className="mt-2 whitespace-pre-line break-words text-sm text-gray-700">{review.comment}</p>
-              : <p className="mt-2 text-sm italic text-gray-400">Rating only (from the old star ratings)</p>}
+              : <p className="mt-2 text-sm italic text-gray-500">Rating only (from the old star ratings)</p>}
           </div>
           <div className="shrink-0">
             <button

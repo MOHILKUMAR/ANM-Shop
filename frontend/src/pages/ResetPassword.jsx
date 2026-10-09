@@ -2,12 +2,14 @@ import { useContext, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 
 function ResetPassword() {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  usePageMeta({ title: "Choose a new password", noindex: true });
   // Read the emailed token once; it is removed from the address bar below.
   const [token] = useState(() => new URLSearchParams(window.location.search).get("token") || "");
   const [password, setPassword] = useState("");

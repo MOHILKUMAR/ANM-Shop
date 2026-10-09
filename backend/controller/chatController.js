@@ -39,7 +39,8 @@ const getChat = async (req, res) => {
 
 const sendChatMessage = async (req, res) => {
     if (!isAssistantConfigured()) {
-        return res.status(503).json({ message: 'The support assistant is not available right now. You can open a ticket on the Support page.' });
+        // `offline` tells the chat window the assistant is switched off, not just busy.
+        return res.status(503).json({ message: 'The support assistant is not available right now. You can open a ticket on the Support page.', offline: true });
     }
     const text = typeof req.body.message === 'string' ? req.body.message.trim() : '';
     if (!text || text.length > MAX_MESSAGE_LENGTH) {
@@ -102,7 +103,7 @@ const sendChatMessage = async (req, res) => {
         if (error instanceof ApiError && [400, 401, 403].includes(error.status)) {
             // Gemini reports an invalid or restricted API key as 400/403.
             console.error('Support assistant request rejected:', error.status, error.message);
-            return res.status(503).json({ message: 'The support assistant is not available right now. You can open a ticket on the Support page.' });
+            return res.status(503).json({ message: 'The support assistant is not available right now. You can open a ticket on the Support page.', offline: true });
         }
         if (error instanceof ApiError && error.status >= 500) {
             // Every model was still overloaded after the retries in supportAssistant.

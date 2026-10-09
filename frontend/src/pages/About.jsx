@@ -1,6 +1,11 @@
 import { Link } from "react-router-dom";
+import { usePageMeta } from "../usePageMeta.js";
 
 function About() {
+  usePageMeta({
+    title: "About us",
+    description: "ANM-Shop brings skincare, makeup, haircare, body care, and beauty tools together in one thoughtful place. Learn what we believe in.",
+  });
   return (
     <main className="bg-gray-50">
       <section className="anm-hero-gradient text-white">
@@ -24,7 +29,7 @@ function About() {
         </div>
         <div className="mt-12 rounded-3xl bg-accent-50 p-8 text-center sm:p-12">
           <p className="font-serif text-3xl text-brand-800">Make room for your ritual.</p>
-          <Link className="mt-6 inline-flex rounded-full bg-brand-700 px-7 py-3 font-semibold text-white hover:bg-brand-800" to="/shop">Explore the beauty edit</Link>
+          <Link className="mt-6 inline-flex rounded-full bg-brand-700 px-7 py-3 font-semibold text-white hover:bg-brand-800" to="/shop">Shop the collection <span aria-hidden="true">→</span></Link>
         </div>
       </section>
     </main>

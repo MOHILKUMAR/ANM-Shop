@@ -122,6 +122,15 @@ function AdminCoupons({ token }) {
 
   async function save(event) {
     event.preventDefault();
+    // Same rule as the server, so the admin hears about it before saving.
+    if (!/^[A-Z0-9_-]{3,30}$/.test(form.code.trim())) {
+      setError("The code must be 3 to 30 letters, numbers, dashes, or underscores (no spaces).");
+      return;
+    }
+    if (form.expiresAt && form.startsAt && new Date(form.expiresAt) <= new Date(form.startsAt)) {
+      setError("The expiry must be after the start.");
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -163,14 +172,15 @@ function AdminCoupons({ token }) {
     }
   }
 
+  // Changes only the on/off switch; resending the whole form would resend the dates too.
   async function toggleActive(coupon) {
     setError("");
     try {
-      const saved = await apiRequest(`/coupons/${coupon._id}`, {
-        method: "PUT",
+      const saved = await apiRequest(`/coupons/${coupon._id}/active`, {
+        method: "PATCH",
         token,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...toForm(coupon), applicableUserEmails: coupon.applicableUserEmails || [], isActive: !coupon.isActive }),
+        body: JSON.stringify({ isActive: !coupon.isActive }),
       });
       setCoupons((current) => current.map((item) => (item._id === saved._id ? saved : item)));
     } catch (requestError) {

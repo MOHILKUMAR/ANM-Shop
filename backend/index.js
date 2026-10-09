@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { migrateEmbeddedReviews } = require('./utils/reviews');
+const { fixOrderBreakdowns } = require('./utils/orderMigrations');
 
 dotenv.config();
 
@@ -62,10 +63,17 @@ app.post(
 );
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '20kb', parameterLimit: 50 }));
+// Express 5 leaves req.body undefined when a request has no body; handlers expect an object
+// so a missing body gets their usual 400 instead of a crash.
+app.use((req, res, next) => {
+    req.body ??= {};
+    next();
+});
 
 app.get('/', (req, res) => {
     res.json({ service: 'ANM-Shop API', status: 'ok' });
 });
+app.get('/sitemap.xml', require('./controller/sitemapController').sitemap);
 
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
@@ -101,11 +109,13 @@ app.use((error, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const startServer = async () => {
     await connectDB();
-    // A failed move is retried on the next start; it must not keep the shop offline.
+    // A failed fix-up is retried on the next start; it must not keep the shop offline.
     await migrateEmbeddedReviews().catch((error) => console.error('Review migration failed:', error.message));
     app.listen(PORT, () => {
         console.log(`Server running ${PORT}`);
     });
+    // Only corrects how old orders display, so the shop doesn't wait for it.
+    fixOrderBreakdowns().catch((error) => console.error('Order breakdown fix failed:', error.message));
 };
 
 startServer().catch((error) => {

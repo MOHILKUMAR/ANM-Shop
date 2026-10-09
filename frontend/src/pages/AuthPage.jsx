@@ -2,28 +2,43 @@ import { useContext, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
+import Honeypot from "../components/Honeypot.jsx";
+import { usePageMeta } from "../usePageMeta.js";
 
 function AuthPage({ register = false }) {
   const { login } = useContext(AuthContext);
   const location = useLocation();
   const navigate = useNavigate();
+  usePageMeta({ title: register ? "Create an account" : "Sign in", noindex: true });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Spam protection (see backend/middleware/spamGuard.js): when the form was opened, and a
+  // hidden field only bots fill in.
+  const [formStartedAt] = useState(() => Date.now());
+  const [leaveBlank, setLeaveBlank] = useState("");
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
+    if (register && !name.trim()) {
+      setError("Enter your name.");
+      return;
+    }
+    if (register && new TextEncoder().encode(password).length > 72) {
+      setError("Use a password of at most 72 characters.");
+      return;
+    }
     setSubmitting(true);
 
     try {
       const result = await apiRequest(register ? "/auth/register" : "/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(register ? { name, email, password } : { email, password }),
+        body: JSON.stringify(register ? { name: name.trim(), email, password, leaveBlank, formElapsedMs: Date.now() - formStartedAt } : { email, password }),
       });
       if (register) {
         navigate("/verify-email", {
@@ -59,12 +74,12 @@ function AuthPage({ register = false }) {
           {register && (
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="name">Name</label>
-              <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id="name" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} />
+              <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id="name" autoComplete="name" maxLength={120} required value={name} onChange={(event) => setName(event.target.value)} />
             </div>
           )}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="email">Email</label>
-            <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+            <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id="email" type="email" autoComplete="email" maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="password">Password</label>
@@ -111,6 +126,7 @@ function AuthPage({ register = false }) {
               </p>
             )}
           </div>
+          {register && <Honeypot value={leaveBlank} onChange={setLeaveBlank} />}
           {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
           <button className="gradient-action w-full justify-center py-3 disabled:cursor-wait disabled:opacity-60" type="submit" disabled={submitting}>
             {submitting ? "Please wait…" : register ? "Create account" : "Sign in"}

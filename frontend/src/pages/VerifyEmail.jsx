@@ -2,10 +2,12 @@ import { useContext, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 function VerifyEmail() {
   const location = useLocation();
   const navigate = useNavigate();
+  usePageMeta({ title: "Verify your email", noindex: true });
   const { login } = useContext(AuthContext);
   const [email, setEmail] = useState(location.state?.email || "");
   const [otp, setOtp] = useState("");

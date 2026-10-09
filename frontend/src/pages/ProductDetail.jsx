@@ -5,6 +5,9 @@ import CartContext from "../context/CartContext.js";
 import { ProductDetailSkeleton } from "../components/Skeletons.jsx";
 import ProductReviews from "../components/ProductReviews.jsx";
 import { overallRating, reviewCountLabel } from "../data/reviews.js";
+import { productImage } from "../imageUrl.js";
+import { usePageMeta } from "../usePageMeta.js";
+import { formatInr } from "../money.js";
 
 function ProductDetail() {
   const { id } = useParams();
@@ -13,6 +16,12 @@ function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [added, setAdded] = useState(false);
+  usePageMeta({
+    title: product?.name || (error ? "Product not found" : "Product"),
+    description: product ? `${product.description} ${formatInr(product.price)} at ANM-Shop.` : undefined,
+    image: product?.imageUrls,
+    noindex: Boolean(error),
+  });
 
   useEffect(() => {
     let active = true;
@@ -37,7 +46,8 @@ function ProductDetail() {
   if (error || !product) {
     return (
       <main className="mx-auto min-h-[60vh] max-w-7xl px-4 py-16 text-center">
-        <p className="mb-5 text-gray-700">{error || "Product not found."}</p>
+        <h1 className="mb-3 text-3xl font-bold text-gray-900">Product not found</h1>
+        <p className="mb-5 text-gray-700">{error && error !== "Beauty product not found" ? error : "This product may have been removed from the shop."}</p>
         <Link className="font-semibold text-brand-700 hover:text-brand-900" to="/shop">Back to shop</Link>
       </main>
     );
@@ -48,7 +58,7 @@ function ProductDetail() {
       <Link className="mb-8 inline-block font-medium text-brand-700 hover:text-brand-900" to="/shop">Back to shop</Link>
       <div className="grid gap-10 rounded-2xl bg-white p-6 shadow-sm md:grid-cols-2 md:p-10">
         <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-xl bg-gray-50">
-          <img className="max-h-112 w-full object-contain" src={product.imageUrls} alt={product.name} />
+          <img className="max-h-112 w-full object-contain" src={productImage(product.imageUrls, 560)} alt={product.name} width="560" height="448" fetchPriority="high" decoding="async" />
         </div>
         <div className="flex flex-col items-start justify-center">
           <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-700">{product.category}</p>

@@ -11,6 +11,13 @@ const createLimiter = (limit, message, options = {}) => rateLimit({
 
 const authLimiter = createLimiter(20, 'Too many account requests. Try again later.');
 const otpLimiter = createLimiter(8, 'Too many verification attempts. Try again later.');
+// New accounts from one network per hour, on top of authLimiter; stops mass sign-ups. Mobile
+// networks in India put many customers behind one IP address, so only sign-ups that went through
+// count (a typo or an email already in use doesn't), and the cap leaves room for a shared network.
+const signupLimiter = createLimiter(30, 'Too many new accounts from this network. Try again later.', {
+    windowMs: 60 * 60 * 1000,
+    skipFailedRequests: true,
+});
 const paymentLimiter = createLimiter(12, 'Too many payment requests. Try again later.');
 // Keyed by account (must run after `protect`) so one user can't drain the shared email quota
 // that verification codes also depend on, even by switching IP addresses.
@@ -28,7 +35,9 @@ const ticketReplyLimiter = createLimiter(30, 'Too many replies. Try again later.
 // Checkout re-prices the cart on every change and coupon attempt; this also slows code guessing.
 const quoteLimiter = createLimiter(120, 'Too many price checks. Wait a few minutes and try again.', perUser);
 const reviewLimiter = createLimiter(20, 'Too many review changes. Try again later.', { ...perUser, windowMs: 60 * 60 * 1000 });
+// The cart and checkout pages look up current prices and stock; no sign-in needed, so by IP.
+const lookupLimiter = createLimiter(120, 'Too many requests. Wait a few minutes and try again.');
 
 module.exports = {
-    authLimiter, otpLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter, quoteLimiter, reviewLimiter,
+    authLimiter, otpLimiter, signupLimiter, paymentLimiter, invoiceEmailLimiter, chatLimiter, ticketLimiter, ticketReplyLimiter, quoteLimiter, reviewLimiter, lookupLimiter,
 };

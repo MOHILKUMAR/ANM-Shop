@@ -20,3 +20,6 @@ export const ticketStatuses = {
 
 // Opens the floating support chat from anywhere (e.g. the Support page).
 export const OPEN_CHAT_EVENT = "anm-shop:open-chat";
+
+// Sent when the chat assistant opens a ticket, so an open Support page can show it.
+export const TICKETS_CHANGED_EVENT = "anm-shop:tickets-changed";

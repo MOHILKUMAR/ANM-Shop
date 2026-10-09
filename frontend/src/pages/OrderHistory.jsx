@@ -2,8 +2,10 @@ import { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 const formatMoney = (amount) => `INR ${Number(amount || 0).toFixed(2)}`;
+const orderDate = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
 const inr = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
 // Subtotal, shipping and discount for orders that have them; empty for older orders.
@@ -43,7 +45,7 @@ async function downloadBill(order) {
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   const details = [
-    [`Order number: ${String(order._id)}`, `Date: ${new Date(order.createdAt).toLocaleDateString()}`],
+    [`Order number: ${String(order._id)}`, `Date: ${orderDate(order.createdAt)}`],
     [`Payment ID: ${order.paymentId || "Not available"}`, `Status: ${String(order.status || "pending").toUpperCase()}`],
   ];
   for (const [left, rightText] of details) {
@@ -133,6 +135,7 @@ async function downloadBill(order) {
 function OrderHistory() {
   const { user } = useContext(AuthContext);
   const [orders, setOrders] = useState([]);
+  usePageMeta({ title: "My orders", noindex: true });
   const [loading, setLoading] = useState(Boolean(user?.token));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -207,7 +210,7 @@ function OrderHistory() {
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-4">
                 <div>
                   <h2 className="font-semibold text-gray-900">Order #{order._id.slice(-8).toUpperCase()}</h2>
-                  <p className="mt-1 text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</p>
+                  <p className="mt-1 text-sm text-gray-500">{orderDate(order.createdAt)}</p>
                 </div>
                 <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-medium capitalize text-brand-800">{order.status}</span>
               </div>

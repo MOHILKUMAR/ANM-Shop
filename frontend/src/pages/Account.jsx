@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import MyCoupons from "../components/MyCoupons.jsx";
+import { usePageMeta } from "../usePageMeta.js";
 
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 
 function Account() {
   const { user, login } = useContext(AuthContext);
+  usePageMeta({ title: "Account settings", noindex: true });
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

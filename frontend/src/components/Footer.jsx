@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import logo from "../assets/anm-shop-logo.svg";
 import { supportEmail, linkedinProfile } from "../data/contactInfo.js";
+import { OPEN_CONSENT_EVENT } from "../consent.js";
 
 function Footer() {
   return (
@@ -28,6 +29,7 @@ function Footer() {
             <li><Link className="text-gray-600 hover:text-brand-700" to="/about">About us</Link></li>
             <li><Link className="text-gray-600 hover:text-brand-700" to="/contact">Contact us</Link></li>
             <li><Link className="text-gray-600 hover:text-brand-700" to="/privacy">Privacy policy</Link></li>
+            <li><Link className="text-gray-600 hover:text-brand-700" to="/terms">Terms and conditions</Link></li>
             <li><Link className="text-gray-600 hover:text-brand-700" to="/returns">Returns and refunds</Link></li>
           </ul>
         </nav>
@@ -41,7 +43,9 @@ function Footer() {
       <div className="border-t border-gray-200">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <p>© {new Date().getFullYear()} ANM-Shop. All rights reserved.</p>
-          <p>Beauty for everyday rituals</p>
+          <button className="w-fit text-left text-gray-500 underline-offset-2 hover:text-brand-700 hover:underline" type="button" onClick={() => window.dispatchEvent(new Event(OPEN_CONSENT_EVENT))}>
+            Privacy choices
+          </button>
         </div>
       </div>
     </footer>

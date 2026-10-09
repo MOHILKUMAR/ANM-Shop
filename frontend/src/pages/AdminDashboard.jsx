@@ -9,15 +9,19 @@ import AdminCoupons from "../components/AdminCoupons.jsx";
 import AdminReviews from "../components/AdminReviews.jsx";
 import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
 import { beautyCategories } from "../data/beautyCategories.js";
+import { productImage } from "../imageUrl.js";
+import { usePageMeta } from "../usePageMeta.js";
 
 // The shared list holds { name, description, icon } for the home page; the admin form needs names.
 const categoryNames = beautyCategories.map((category) => category.name);
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // the server's upload limit
 const emptyProduct = { name: "", description: "", price: "", category: "Skincare", stock: "" };
 const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
 function AdminDashboard() {
   const { user } = useContext(AuthContext);
+  usePageMeta({ title: "Admin dashboard", noindex: true });
   const [stats, setStats] = useState(null);
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState({ page: 1, pages: 1, total: 0 });
@@ -81,6 +85,14 @@ function AdminDashboard() {
   async function saveProduct(event) {
     event.preventDefault();
     const form = event.currentTarget;
+    if (!product.name.trim() || !product.description.trim()) {
+      setError("Enter a product name and description.");
+      return;
+    }
+    if (image && image.size > MAX_IMAGE_BYTES) {
+      setError("The image must be 5 MB or smaller. Choose a smaller JPEG, PNG, or WebP file.");
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -270,16 +282,26 @@ function AdminDashboard() {
           <form className="h-fit space-y-4 rounded-xl border border-gray-200 bg-white p-5" onSubmit={saveProduct}>
             <h2 className="text-lg font-semibold text-gray-900">{editingProductId ? "Edit product" : "Add a beauty product"}</h2>
             {[
-              ["name", "Name", "text"],
-              ["description", "Description", "text"],
-              ["price", "Price (INR)", "number"],
-              ["stock", "Stock quantity", "number"],
-            ].map(([field, label, type]) => (
-              <div key={field}>
-                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor={`product-${field}`}>{label}</label>
-                <input className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand-500" id={`product-${field}`} type={type} min={type === "number" ? (field === "price" ? "0.01" : "0") : undefined} step={field === "price" ? "0.01" : undefined} required value={product[field]} onChange={(event) => setProduct((current) => ({ ...current, [field]: event.target.value }))} />
-              </div>
-            ))}
+              ["name", "Name", { maxLength: 120 }],
+              ["description", "Description", { maxLength: 5000, rows: 4 }],
+              ["price", "Price (INR)", { type: "number", min: "0.01", max: "100000000", step: "0.01", inputMode: "decimal" }],
+              ["stock", "Stock quantity", { type: "number", min: "0", max: "1000000", step: "1", inputMode: "numeric" }],
+            ].map(([field, label, limits]) => {
+              const props = {
+                className: "w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand-500",
+                id: `product-${field}`,
+                required: true,
+                value: product[field],
+                onChange: (event) => setProduct((current) => ({ ...current, [field]: event.target.value })),
+                ...limits,
+              };
+              return (
+                <div key={field}>
+                  <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor={`product-${field}`}>{label}</label>
+                  {field === "description" ? <textarea {...props} /> : <input {...props} />}
+                </div>
+              );
+            })}
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="product-category">Category</label>
               <select className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand-500" id="product-category" required value={product.category} onChange={(event) => setProduct((current) => ({ ...current, category: event.target.value }))}>
@@ -288,7 +310,8 @@ function AdminDashboard() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="product-image">Product image</label>
-              <input className="w-full text-sm text-gray-600" id="product-image" type="file" accept="image/jpeg,image/png,image/webp" required={!editingProductId} onChange={(event) => setImage(event.target.files?.[0] || null)} />
+              <p className="mb-1 text-xs text-gray-500" id="product-image-hint">JPEG, PNG, or WebP, up to 5 MB.</p>
+              <input className="w-full text-sm text-gray-600" id="product-image" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="product-image-hint" required={!editingProductId} onChange={(event) => setImage(event.target.files?.[0] || null)} />
             </div>
             <button className="w-full rounded-lg bg-brand-700 px-4 py-2.5 font-semibold text-white hover:bg-brand-800 disabled:opacity-60" type="submit" disabled={busy}>{busy ? "Saving..." : editingProductId ? "Save changes" : "Add product"}</button>
             {editingProductId && <button className="w-full rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-50" type="button" onClick={() => { setEditingProductId(null); setProduct(emptyProduct); setImage(null); }}>Cancel edit</button>}
@@ -299,7 +322,7 @@ function AdminDashboard() {
             {loadingData && <ListSkeleton rows={5} withThumbnail label="Loading products" />}
             {products.map((item) => (
               <article className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4" key={item._id}>
-                <img className="h-16 w-16 rounded-lg bg-gray-50 object-contain" src={item.imageUrls} alt="" />
+                <img className="h-16 w-16 rounded-lg bg-gray-50 object-contain" src={productImage(item.imageUrls, 64)} alt="" width="64" height="64" loading="lazy" decoding="async" />
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate font-semibold text-gray-900">{item.name}</h3>
                   <p className="text-sm text-gray-500">{item.category} | {money(item.price)} | {item.stock} in stock</p>
@@ -336,7 +359,7 @@ function AdminDashboard() {
             <article className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 md:flex-row md:items-center" key={order._id}>
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-gray-900">Order #{order._id.slice(-8).toUpperCase()}</h3>
-                <p className="mt-1 text-sm text-gray-500">{order.user?.name || "Customer"} | {order.user?.email || ""} | {new Date(order.createdAt).toLocaleDateString()}</p>
+                <p className="mt-1 text-sm text-gray-500">{order.user?.name || "Customer"} | {order.user?.email || ""} | {new Date(order.createdAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</p>
                 <p className="mt-2 text-sm text-gray-700">{order.items.map((item) => `${item.productId?.name || "Product"} x ${item.qty}`).join(", ")}</p>
               </div>
               <p className="font-semibold text-gray-900">{money(order.totalAmount)}</p>

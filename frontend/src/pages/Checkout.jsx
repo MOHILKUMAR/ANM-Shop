@@ -4,9 +4,19 @@ import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import CartContext from "../context/CartContext.js";
 import { Shimmer } from "../components/Skeletons.jsx";
+import { usePageMeta } from "../usePageMeta.js";
+import { formatInr as money } from "../money.js";
 
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const methodLabels = { upi: "UPI", card: "Card", netbanking: "Net banking", wallet: "Wallet" };
+// Same rule as the server: 8 to 15 digits once spaces, brackets, and dashes are removed.
+const isValidPhone = (phone) => /^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s()-]/g, ""));
+const PHONE_HINT = "Enter a valid mobile number with 8 to 15 digits, e.g. +91 98765 43210.";
+// The server's limits for each address field.
+const ADDRESS_LIMITS = { fullName: 120, street: 300, city: 100, postalCode: 24, country: 100, phone: 20 };
+// Indian PIN codes are 6 digits and never start with 0; other countries are checked loosely.
+const isValidPostalCode = (code, country) => !/^india$/i.test(country.trim()) || /^[1-9]\d{5}$/.test(code.replace(/\s/g, ""));
+// Identifies one price check, so the page knows whether the quote on screen is for what's shown.
+const quoteKeyOf = (itemsKey, couponCode, attempt) => JSON.stringify([itemsKey, couponCode, attempt]);
 
 // Razorpay Checkout only shows the payment methods a coupon allows.
 const methodRestriction = (methods) => (methods?.length ? {
@@ -21,8 +31,9 @@ const methodRestriction = (methods) => (methods?.length ? {
 
 function Checkout() {
   const { user } = useContext(AuthContext);
-  const { cart, clearCart } = useContext(CartContext);
+  const { cart, clearCart, refreshCart } = useContext(CartContext);
   const navigate = useNavigate();
+  usePageMeta({ title: "Checkout", noindex: true });
   const [sdkReady, setSdkReady] = useState(Boolean(window.Razorpay));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -36,6 +47,10 @@ function Checkout() {
   });
   const [quote, setQuote] = useState(null);
   const [quoteError, setQuoteError] = useState("");
+  // The price check the current quote or error came from, and a counter for "Try again".
+  const [quotedKey, setQuotedKey] = useState("");
+  const [quoteAttempt, setQuoteAttempt] = useState(0);
+  const [cartChanges, setCartChanges] = useState([]);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCode, setAppliedCode] = useState("");
   const [couponMessage, setCouponMessage] = useState("");
@@ -56,10 +71,25 @@ function Checkout() {
     return () => script.remove();
   }, [user, cart.length]);
 
+  // Prices and stock are saved with each item when it is added; bring them up to date first.
+  useEffect(() => {
+    if (!user) return undefined;
+    let active = true;
+    refreshCart()
+      .then((notes) => {
+        if (active) setCartChanges(notes);
+      })
+      .catch(() => {}); // the quote below still prices everything on the server
+    return () => {
+      active = false;
+    };
+  }, [user, refreshCart]);
+
   // The server prices the cart (shipping and coupon included) whenever it or the coupon changes.
   useEffect(() => {
     if (!user?.token || itemsKey === "[]") return undefined;
     let active = true;
+    const requestKey = quoteKeyOf(itemsKey, appliedCode, quoteAttempt);
     apiRequest("/payment/quote", {
       method: "POST",
       token: user.token,
@@ -70,18 +100,33 @@ function Checkout() {
         if (!active) return;
         setQuote(result);
         setQuoteError("");
+        setQuotedKey(requestKey);
         if (result.couponError) {
           setCouponMessage(result.couponError);
           setAppliedCode("");
         }
       })
       .catch((requestError) => {
-        if (active) setQuoteError(requestError.message);
+        if (!active) return;
+        setQuoteError(requestError.message);
+        setQuotedKey(requestKey);
+        if (appliedCode) {
+          // Let the customer apply it again instead of leaving the box stuck on "Checking…".
+          setCouponMessage(`Coupon ${appliedCode} couldn't be checked. Apply it again.`);
+          setAppliedCode("");
+        }
+        if (requestError.data?.unavailableProductIds) {
+          refreshCart()
+            .then((notes) => {
+              if (active) setCartChanges(notes);
+            })
+            .catch(() => {});
+        }
       });
     return () => {
       active = false;
     };
-  }, [user?.token, itemsKey, appliedCode]);
+  }, [user?.token, itemsKey, appliedCode, quoteAttempt, refreshCart]);
 
   useEffect(() => {
     if (!user?.token) return undefined;
@@ -109,6 +154,11 @@ function Checkout() {
   if (cart.length === 0) {
     return (
       <main className="mx-auto min-h-[60vh] max-w-3xl px-4 py-16 text-center">
+        {cartChanges.length > 0 && !error && (
+          <ul className="mb-6 space-y-1 rounded-xl bg-amber-50 p-4 text-left text-sm text-amber-800" role="status">
+            {cartChanges.map((note) => <li key={note}>{note}</li>)}
+          </ul>
+        )}
         {error ? (
           <>
             <h1 className="text-3xl font-bold text-gray-900">About your payment</h1>
@@ -126,7 +176,9 @@ function Checkout() {
   }
 
   const coupon = quote?.coupon;
-  const pricingReady = Boolean(quote) && !quoteError;
+  // True while the price for the current cart and coupon is still being worked out.
+  const quoting = quotedKey !== quoteKeyOf(itemsKey, appliedCode, quoteAttempt);
+  const pricingReady = Boolean(quote) && !quoteError && !quoting;
 
   function updateAddress(event) {
     const { name, value } = event.target;
@@ -150,6 +202,22 @@ function Checkout() {
   async function startPayment(event) {
     event.preventDefault();
     setError("");
+    const blank = Object.keys(ADDRESS_LIMITS).find((field) => !address[field].trim());
+    if (blank) {
+      setError("Fill in every part of the shipping address.");
+      document.getElementById(blank)?.focus();
+      return;
+    }
+    if (!isValidPostalCode(address.postalCode, address.country)) {
+      setError("Enter a valid 6-digit PIN code, e.g. 110001.");
+      document.getElementById("postalCode")?.focus();
+      return;
+    }
+    if (!isValidPhone(address.phone)) {
+      setError(PHONE_HINT);
+      document.getElementById("phone")?.focus();
+      return;
+    }
     setBusy(true);
 
     try {
@@ -214,6 +282,12 @@ function Checkout() {
         // The coupon stopped being valid; show the new price before charging anything.
         setCouponMessage(requestError.message);
         setAppliedCode("");
+      } else if (requestError.data?.unavailableProductIds) {
+        // Not a payment problem: nothing was charged. Update the cart and say what changed.
+        setCartChanges([requestError.message]);
+        refreshCart()
+          .then((notes) => setCartChanges(notes.length ? notes : [requestError.message]))
+          .catch(() => {});
       } else {
         setError(requestError.message);
       }
@@ -242,12 +316,19 @@ function Checkout() {
             ].map(([field, label, type, autocomplete]) => (
               <div className={field === "street" ? "sm:col-span-2" : ""} key={field}>
                 <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor={field}>{label}</label>
-                <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id={field} name={field} type={type} autoComplete={autocomplete} placeholder={field === "phone" ? "+91 98765 43210" : undefined} maxLength={field === "phone" ? 20 : undefined} pattern={field === "phone" ? "\\+?[1-9][0-9\\s()-]{6,17}" : undefined} required value={address[field]} onChange={updateAddress} />
+                <input className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" id={field} name={field} type={type} autoComplete={autocomplete} placeholder={field === "phone" ? "+91 98765 43210" : undefined} maxLength={ADDRESS_LIMITS[field]} inputMode={field === "postalCode" ? "numeric" : undefined} required value={address[field]} onChange={updateAddress} />
               </div>
             ))}
           </div>
           {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
-          {quoteError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{quoteError}</p>}
+          {quoteError && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">
+              <p>{quoteError}</p>
+              <button className="rounded-md border border-red-300 px-3 py-1 font-semibold hover:bg-red-100 disabled:opacity-50" type="button" disabled={quoting} onClick={() => setQuoteAttempt((attempt) => attempt + 1)}>
+                {quoting ? "Checking…" : "Try again"}
+              </button>
+            </div>
+          )}
           {coupon?.paymentMethods?.length > 0 && (
             <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
               Coupon {coupon.code} works with {coupon.paymentMethods.map((method) => methodLabels[method]).join(" or ")} only; the payment window will show just those options.
@@ -256,10 +337,19 @@ function Checkout() {
           <button className="w-full rounded-lg bg-brand-700 px-5 py-3 font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={busy || !sdkReady || !pricingReady}>
             {!sdkReady ? "Loading secure payment…" : busy ? "Waiting for payment…" : pricingReady ? `Pay ${money(quote.total)} securely` : "Pay securely"}
           </button>
-          <p className="text-center text-xs text-gray-500">Prices, stock, and coupons are checked by the server before payment.</p>
+          <p className="text-center text-xs text-gray-500">
+            By paying you agree to our <Link className="underline hover:text-brand-700" to="/terms">Terms</Link>,{" "}
+            <Link className="underline hover:text-brand-700" to="/returns">Returns policy</Link>, and{" "}
+            <Link className="underline hover:text-brand-700" to="/privacy">Privacy policy</Link>. Prices, stock, and coupons are checked again before payment.
+          </p>
         </form>
 
         <aside className="h-fit space-y-5 rounded-xl border border-gray-200 bg-white p-6">
+          {cartChanges.length > 0 && (
+            <ul className="space-y-1 rounded-lg bg-amber-50 p-3 text-sm text-amber-800" role="status">
+              {cartChanges.map((note) => <li key={note}>{note}</li>)}
+            </ul>
+          )}
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Order summary</h2>
             <ul className="mt-4 space-y-3">
@@ -285,8 +375,8 @@ function Checkout() {
             ) : (
               <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); applyCoupon(couponInput); }}>
                 <input id="coupon-code" className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm uppercase outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" maxLength={30} placeholder="Enter code" value={couponInput} onChange={(event) => setCouponInput(event.target.value)} />
-                <button className="rounded-lg border border-brand-600 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 disabled:opacity-50" type="submit" disabled={!couponInput.trim() || appliedCode !== ""}>
-                  {appliedCode ? "Checking…" : "Apply"}
+                <button className="rounded-lg border border-brand-600 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 disabled:opacity-50" type="submit" disabled={!couponInput.trim() || (quoting && appliedCode !== "")}>
+                  {quoting && appliedCode ? "Checking…" : "Apply"}
                 </button>
               </form>
             )}

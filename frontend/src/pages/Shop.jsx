@@ -3,6 +3,16 @@ import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import ProductCard from "../components/ProductCard.jsx";
 import { ProductGridSkeleton, Shimmer } from "../components/Skeletons.jsx";
+import { usePageMeta } from "../usePageMeta.js";
+import { beautyCategories } from "../data/beautyCategories.js";
+
+// What search results show for the shop, or for one category of it.
+const categoryDescription = (category) => {
+  const match = beautyCategories.find((item) => item.name === category);
+  return match
+    ? `${match.description} Shop ${match.name.toLowerCase()} at ANM-Shop with secure checkout and free shipping above ₹499.`
+    : "Browse ANM-Shop's beauty collection: skincare, face and eye makeup, lip colour, haircare, body care, and beauty tools. Free shipping above ₹499.";
+};
 
 function Shop() {
   const [products, setProducts] = useState([]);
@@ -14,6 +24,11 @@ function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
   const category = searchParams.get("category") || "";
   const page = Number(searchParams.get("page")) || 1;
+  usePageMeta({
+    title: category || "Shop skincare, makeup & haircare",
+    description: categoryDescription(category),
+    path: category ? `/shop?category=${encodeURIComponent(category)}` : "/shop",
+  });
 
   useEffect(() => {
     let active = true;
@@ -109,7 +124,7 @@ function Shop() {
       {!loading && !error && products.length > 0 && (
         <>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {products.map((product) => <ProductCard key={product._id} product={product} />)}
+            {products.map((product, index) => <ProductCard key={product._id} product={product} priority={index < 4} />)}
           </div>
           {pagination.pages > 1 && (
             <nav className="mt-10 flex items-center justify-center gap-4" aria-label="Product pages">
