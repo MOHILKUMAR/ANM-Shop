@@ -111,8 +111,7 @@ const startServer = async () => {
     await connectDB();
     // A failed fix-up is retried on the next start; it must not keep the shop offline.
     await migrateEmbeddedReviews().catch((error) => console.error('Review migration failed:', error.message));
-    // Runs before payments are accepted, so no checkout is completed with the old breakdown.
-    // After the first run it is a single lookup.
+    // Corrects old orders once; after the first run it is a single lookup.
     await fixOrderBreakdowns().catch((error) => console.error('Order breakdown fix failed:', error.message));
     app.listen(PORT, () => {
         console.log(`Server running ${PORT}`);
