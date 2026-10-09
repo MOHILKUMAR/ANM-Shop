@@ -21,7 +21,6 @@ const paymentIntentSchema = new mongoose.Schema(
     razorpayOrderId: { type: String, required: true, unique: true },
     amountPaise: { type: Number, required: true, min: 1 },
     subtotalPaise: { type: Number, min: 0 },
-    shippingPaise: { type: Number, min: 0, default: 0 },
     discountPaise: { type: Number, min: 0, default: 0 },
     coupon: {
       id: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },

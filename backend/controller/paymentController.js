@@ -78,10 +78,9 @@ const createdOrder = async (req, res) => {
             },
             razorpayOrderId: razorpayOrder.id,
             amountPaise: priced.totalPaise,
-            // subtotal + shipping - discount = amount: shipping is the fee before any coupon and
-            // the discount is everything the coupon saved, waived shipping included.
+            // The discount is everything the coupon saved, waived shipping included, so the order's
+            // shipping fee (before any coupon) is amount - subtotal + discount (fulfillPayment).
             subtotalPaise: priced.subtotalPaise,
-            shippingPaise: priced.shippingBasePaise,
             discountPaise: priced.savingsPaise,
             ...(priced.coupon ? {
                 coupon: { id: priced.coupon._id, code: priced.coupon.code },
@@ -242,8 +241,7 @@ const fulfillPayment = async (intentId, paymentId, paymentMethod) => {
                 ...(intent.subtotalPaise !== undefined ? {
                     subtotalAmount: intent.subtotalPaise / 100,
                     // The fee before any coupon (a free-shipping coupon's saving is in the discount),
-                    // worked out from the totals so the breakdown always adds up to what was paid,
-                    // including on checkouts started before shipping was stored this way.
+                    // worked out from the totals so the breakdown always adds up to what was paid.
                     shippingFee: (intent.amountPaise - intent.subtotalPaise + intent.discountPaise) / 100,
                     discountAmount: intent.discountPaise / 100,
                 } : {}),
