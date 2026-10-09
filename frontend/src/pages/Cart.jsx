@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import CartContext from "../context/CartContext.js";
 import { productImage } from "../imageUrl.js";
 import { usePageMeta } from "../usePageMeta.js";
+import { formatInr } from "../money.js";
 
 // Display only; the server works out the real shipping and total at checkout.
 const SHIPPING_FEE = 49;
@@ -53,7 +54,7 @@ function Cart() {
                 <img className="h-24 w-24 rounded-lg bg-gray-50 object-contain" src={productImage(item.imageUrls, 96)} alt={item.name} width="96" height="96" loading="lazy" decoding="async" />
                 <div className="min-w-0 flex-1">
                   <Link className="font-semibold text-gray-900 hover:text-brand-700" to={`/product/${item._id}`}>{item.name}</Link>
-                  <p className="mt-1 text-sm text-gray-600">{Number(item.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })} each</p>
+                  <p className="mt-1 text-sm text-gray-600">{formatInr(item.price)} each</p>
                   <button className="mt-2 text-sm font-medium text-red-600 hover:text-red-800" type="button" onClick={() => removeFromCart(item._id)}>Remove</button>
                 </div>
                 <div className="flex items-center gap-3">
@@ -62,7 +63,7 @@ function Cart() {
                   <button className="h-9 w-9 rounded border border-gray-300 text-lg disabled:opacity-40" type="button" aria-label={`Increase ${item.name} quantity`} disabled={item.quantity >= Number(item.stock)} onClick={() => updateQuantity(item._id, item.quantity + 1)}>+</button>
                 </div>
                 <p className="min-w-24 text-right font-semibold text-gray-900">
-                  {(Number(item.price) * item.quantity).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+                  {formatInr(Number(item.price) * item.quantity)}
                 </p>
               </li>
             ))}
@@ -71,12 +72,12 @@ function Cart() {
             <h2 className="text-lg font-semibold text-gray-900">Order summary</h2>
             <div className="mt-5 flex justify-between border-t border-gray-200 pt-4 font-semibold text-gray-900">
               <span>Subtotal</span>
-              <span>{total.toLocaleString("en-IN", { style: "currency", currency: "INR" })}</span>
+              <span>{formatInr(total)}</span>
             </div>
             <p className="mt-2 text-xs text-gray-500">
               {total >= FREE_SHIPPING_ABOVE
                 ? "Your order ships free."
-                : `Add ${(FREE_SHIPPING_ABOVE - total).toLocaleString("en-IN", { style: "currency", currency: "INR" })} more for free shipping, or pay ${SHIPPING_FEE.toLocaleString("en-IN", { style: "currency", currency: "INR" })} at checkout.`}
+                : `Add ${formatInr(FREE_SHIPPING_ABOVE - total)} more for free shipping, or pay ${formatInr(SHIPPING_FEE)} at checkout.`}
             </p>
             <p className="mt-1 text-xs text-gray-500">Apply a coupon at checkout.</p>
             <Link className="mt-6 block rounded-lg bg-brand-700 px-5 py-3 text-center font-semibold text-white hover:bg-brand-800" to="/checkout">Proceed to checkout</Link>

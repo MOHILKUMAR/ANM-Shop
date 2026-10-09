@@ -2,15 +2,15 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
+import { formatInr } from "../money.js";
 
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const day = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
 const methodLabels = { upi: "UPI", card: "card", netbanking: "net banking", wallet: "wallet" };
 
 // The conditions under a coupon, in the order a customer would ask about them.
 function conditions(coupon) {
   const lines = [];
-  if (coupon.minCartValue > 0) lines.push(`Minimum order ${money(coupon.minCartValue)}`);
+  if (coupon.minCartValue > 0) lines.push(`Minimum order ${formatInr(coupon.minCartValue)}`);
   if (coupon.categories?.length) lines.push(`On ${coupon.categories.join(", ")}`);
   if (coupon.products?.length) lines.push(`On ${coupon.products.slice(0, 3).join(", ")}${coupon.products.length > 3 ? ` and ${coupon.products.length - 3} more` : ""}`);
   if (coupon.paymentMethods?.length) lines.push(`Pay by ${coupon.paymentMethods.map((method) => methodLabels[method] || method).join(" or ")}`);

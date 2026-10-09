@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../api.js";
 import { TableSkeleton } from "./Skeletons.jsx";
+import { formatInr } from "../money.js";
 
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const day = (date) => (date ? new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" }) : "-");
 
 // One header row plus one row per account. Cells without an explicit formula type are
@@ -124,7 +124,7 @@ function AdminUsers({ token }) {
                   </td>
                   <td className="px-4 py-3 text-gray-700">{day(user.joinedAt)}</td>
                   <td className="px-4 py-3 text-right text-gray-900">{user.orderCount}</td>
-                  <td className="px-4 py-3 text-right text-gray-900">{money(user.totalSpent)}</td>
+                  <td className="px-4 py-3 text-right text-gray-900">{formatInr(user.totalSpent)}</td>
                 </tr>
               ))}
             </tbody>

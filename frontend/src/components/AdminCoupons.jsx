@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
 import { beautyCategories } from "../data/beautyCategories.js";
+import { formatInr } from "../money.js";
 
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const day = (date) => (date ? new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" }) : null);
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 
@@ -311,8 +311,8 @@ function AdminCoupons({ token }) {
               </div>
               <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <div className="flex gap-2"><dt className="text-gray-500">Used</dt><dd className="text-gray-900">{coupon.usedCount}{coupon.usageLimit ? ` of ${coupon.usageLimit}` : ""}{coupon.perUserLimit ? ` · max ${coupon.perUserLimit} per customer` : ""}</dd></div>
-                {coupon.minCartValue > 0 && <div className="flex gap-2"><dt className="text-gray-500">Min cart</dt><dd className="text-gray-900">{money(coupon.minCartValue)}</dd></div>}
-                {coupon.maxDiscount && <div className="flex gap-2"><dt className="text-gray-500">Max discount</dt><dd className="text-gray-900">{money(coupon.maxDiscount)}</dd></div>}
+                {coupon.minCartValue > 0 && <div className="flex gap-2"><dt className="text-gray-500">Min cart</dt><dd className="text-gray-900">{formatInr(coupon.minCartValue)}</dd></div>}
+                {coupon.maxDiscount && <div className="flex gap-2"><dt className="text-gray-500">Max discount</dt><dd className="text-gray-900">{formatInr(coupon.maxDiscount)}</dd></div>}
                 <div className="flex gap-2"><dt className="text-gray-500">Runs</dt><dd className="text-gray-900">{day(coupon.startsAt)} → {day(coupon.expiresAt) || "no end"}</dd></div>
                 {coupon.applicableCategories?.length > 0 && <div className="flex gap-2"><dt className="text-gray-500">Categories</dt><dd className="text-gray-900">{coupon.applicableCategories.join(", ")}</dd></div>}
                 {coupon.applicableProducts?.length > 0 && <div className="flex gap-2"><dt className="text-gray-500">Products</dt><dd className="text-gray-900">{coupon.applicableProducts.map((product) => product.name).join(", ")}</dd></div>}

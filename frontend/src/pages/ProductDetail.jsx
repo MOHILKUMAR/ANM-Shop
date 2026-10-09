@@ -64,7 +64,7 @@ function ProductDetail() {
           <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-700">{product.category}</p>
           <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
           <p className="mt-4 text-2xl font-semibold text-gray-900">
-            {Number(product.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+            {formatInr(product.price)}
           </p>
           <a className="mt-3 text-sm font-medium text-amber-700 hover:text-amber-900" href="#reviews-heading">
             {product.numReviews > 0 ? `Rated ${overallRating(product.ratingCounts).label} · ${reviewCountLabel(product.numReviews)}` : "No customer reviews yet"}

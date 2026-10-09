@@ -6,6 +6,7 @@ import { ListSkeleton } from "../components/Skeletons.jsx";
 import { TicketSummary, TicketThread } from "../components/TicketThread.jsx";
 import { OPEN_CHAT_EVENT, TICKETS_CHANGED_EVENT, ticketCategories } from "../data/tickets.js";
 import { usePageMeta } from "../usePageMeta.js";
+import { formatInr } from "../money.js";
 
 const inputClass = "w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const emptyForm = { subject: "", category: "order", orderCode: "", description: "" };
@@ -126,7 +127,7 @@ function Support() {
               <option value="">No specific order</option>
               {orders.map((order) => (
                 <option key={order._id} value={order._id}>
-                  #{order._id.slice(-8).toUpperCase()} · {new Date(order.createdAt).toLocaleDateString("en-IN")} · {Number(order.totalAmount).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+                  #{order._id.slice(-8).toUpperCase()} · {new Date(order.createdAt).toLocaleDateString("en-IN")} · {formatInr(order.totalAmount)}
                 </option>
               ))}
             </select>

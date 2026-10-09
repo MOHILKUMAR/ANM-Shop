@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import CartContext from "../context/CartContext.js";
 import { overallRating, reviewCountLabel } from "../data/reviews.js";
 import { productImage } from "../imageUrl.js";
+import { formatInr } from "../money.js";
 
 // `priority`: one of the first cards on screen, so its image loads first instead of lazily.
 function ProductCard({ product, priority = false }) {
@@ -26,7 +27,7 @@ function ProductCard({ product, priority = false }) {
         <p className="mt-2 line-clamp-2 flex-1 text-sm text-gray-600">{product.description}</p>
         <div className="mt-5 flex items-center justify-between gap-3">
           <span className="font-bold text-gray-900">
-            {Number(product.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+            {formatInr(product.price)}
           </span>
           <button
             className="rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-gray-400"
