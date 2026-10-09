@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { apiRequest } from "../api.js";
+import { formatInr } from "../money.js";
 
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 const shortId = (id) => `#${String(id).slice(-8).toUpperCase()}`;
 const when = (date) => (date ? new Date(date).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "-");
 
@@ -80,7 +80,7 @@ function OrderResult({ order, onSearch, onDelete }) {
       </div>
       <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Customer">{order.user?.name || "Deleted account"}<br /><span className="text-gray-500">{order.user?.email || ""}</span></Field>
-        <Field label="Total paid">{money(order.totalAmount)}</Field>
+        <Field label="Total paid">{formatInr(order.totalAmount)}</Field>
         <Field label="Payment ID"><IdLink value={order.paymentId} onSearch={onSearch} /></Field>
         <Field label="Placed">{when(order.createdAt)}</Field>
       </dl>
@@ -88,7 +88,7 @@ function OrderResult({ order, onSearch, onDelete }) {
         {order.items.map((item, index) => (
           <li className="flex justify-between gap-3 py-2" key={`${item.productId?._id || item.productId}-${index}`}>
             <span className="text-gray-700">{item.productId?.name || "Deleted product"} × {item.qty}</span>
-            <span className="text-gray-900">{money(Number(item.price) * item.qty)}</span>
+            <span className="text-gray-900">{formatInr(Number(item.price) * item.qty)}</span>
           </li>
         ))}
       </ul>
@@ -106,7 +106,7 @@ function PaymentResult({ payment, onSearch, onDelete }) {
     <article className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-3">
         <div>
-          <h4 className="font-semibold text-gray-900">{money(payment.amountPaise / 100)} checkout</h4>
+          <h4 className="font-semibold text-gray-900">{formatInr(payment.amountPaise / 100)} checkout</h4>
           <p className="mt-1 text-sm text-gray-500">{payment.user?.name || "Deleted account"} {payment.user?.email ? `| ${payment.user.email}` : ""}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -144,7 +144,7 @@ function CustomerResult({ customer, onSearch, onDelete }) {
           {user.role !== "admin" && user.email && <DeleteButton label="Delete account" onClick={() => onDelete("user", user)} />}
         </div>
       </div>
-      <p className="mt-4 text-sm text-gray-700">{customer.orderCount} order{customer.orderCount === 1 ? "" : "s"} | {money(customer.totalSpent)} spent</p>
+      <p className="mt-4 text-sm text-gray-700">{customer.orderCount} order{customer.orderCount === 1 ? "" : "s"} | {formatInr(customer.totalSpent)} spent</p>
 
       <h5 className="mt-5 text-sm font-semibold text-gray-900">Order history</h5>
       {customer.orders.length ? (
@@ -158,7 +158,7 @@ function CustomerResult({ customer, onSearch, onDelete }) {
                 <tr key={order._id}>
                   <td className="py-2 pr-3"><IdLink value={order._id} label={shortId(order._id)} onSearch={onSearch} /></td>
                   <td className="py-2 pr-3 text-gray-700">{when(order.createdAt)}</td>
-                  <td className="py-2 pr-3 text-gray-900">{money(order.totalAmount)}</td>
+                  <td className="py-2 pr-3 text-gray-900">{formatInr(order.totalAmount)}</td>
                   <td className="py-2 pr-3 capitalize text-gray-700">{order.status}</td>
                   <td className="py-2"><IdLink value={order.paymentId} onSearch={onSearch} /></td>
                 </tr>
@@ -173,7 +173,7 @@ function CustomerResult({ customer, onSearch, onDelete }) {
         <ul className="mt-2 divide-y divide-gray-100 text-sm">
           {customer.payments.map((payment) => (
             <li className="flex flex-wrap items-center justify-between gap-3 py-2" key={payment._id}>
-              <span className="text-gray-700">{when(payment.createdAt)} | {money(payment.amountPaise / 100)}</span>
+              <span className="text-gray-700">{when(payment.createdAt)} | {formatInr(payment.amountPaise / 100)}</span>
               <IdLink value={payment.paymentId || payment.razorpayOrderId} onSearch={onSearch} />
               <StatusBadge status={payment.status} />
             </li>

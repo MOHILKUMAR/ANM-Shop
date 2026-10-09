@@ -3,8 +3,8 @@ import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
 import { TicketSummary, TicketThread } from "./TicketThread.jsx";
 import { ticketStatuses } from "../data/tickets.js";
+import { formatInr } from "../money.js";
 
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
 function AdminTickets({ token }) {
   const [filter, setFilter] = useState("open");
@@ -114,7 +114,7 @@ function AdminTickets({ token }) {
             <>
               {ticket.order?.totalAmount !== undefined && (
                 <p className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
-                  Order {ticket.order.code}: {money(ticket.order.totalAmount)} · <span className="capitalize">{ticket.order.status}</span> · placed {new Date(ticket.order.createdAt).toLocaleDateString("en-IN")} · payment <span className="font-mono">{ticket.order.paymentId || "-"}</span>
+                  Order {ticket.order.code}: {formatInr(ticket.order.totalAmount)} · <span className="capitalize">{ticket.order.status}</span> · placed {new Date(ticket.order.createdAt).toLocaleDateString("en-IN")} · payment <span className="font-mono">{ticket.order.paymentId || "-"}</span>
                 </p>
               )}
               <TicketThread ticket={ticket} viewer="admin" onReply={(body) => reply(ticket._id, body)} />

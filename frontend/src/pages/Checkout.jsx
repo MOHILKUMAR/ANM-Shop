@@ -5,7 +5,7 @@ import AuthContext from "../context/AuthContext.js";
 import CartContext from "../context/CartContext.js";
 import { Shimmer } from "../components/Skeletons.jsx";
 import { usePageMeta } from "../usePageMeta.js";
-import { formatInr as money } from "../money.js";
+import { formatInr } from "../money.js";
 
 const methodLabels = { upi: "UPI", card: "Card", netbanking: "Net banking", wallet: "Wallet" };
 // Same rule as the server: 8 to 15 digits once spaces, brackets, and dashes are removed.
@@ -335,7 +335,7 @@ function Checkout() {
             </p>
           )}
           <button className="w-full rounded-lg bg-brand-700 px-5 py-3 font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={busy || !sdkReady || !pricingReady}>
-            {!sdkReady ? "Loading secure payment…" : busy ? "Waiting for payment…" : pricingReady ? `Pay ${money(quote.total)} securely` : "Pay securely"}
+            {!sdkReady ? "Loading secure payment…" : busy ? "Waiting for payment…" : pricingReady ? `Pay ${formatInr(quote.total)} securely` : "Pay securely"}
           </button>
           <p className="text-center text-xs text-gray-500">
             By paying you agree to our <Link className="underline hover:text-brand-700" to="/terms">Terms</Link>,{" "}
@@ -356,7 +356,7 @@ function Checkout() {
               {cart.map((item) => (
                 <li className="flex justify-between gap-3 text-sm" key={item._id}>
                   <span className="text-gray-600">{item.name} × {item.quantity}</span>
-                  <span className="font-medium text-gray-900">{money(Number(item.price) * item.quantity)}</span>
+                  <span className="font-medium text-gray-900">{formatInr(Number(item.price) * item.quantity)}</span>
                 </li>
               ))}
             </ul>
@@ -398,12 +398,12 @@ function Checkout() {
           <dl className="space-y-2 border-t border-gray-200 pt-4 text-sm">
             {pricingReady ? (
               <>
-                <div className="flex justify-between"><dt className="text-gray-600">Subtotal</dt><dd className="text-gray-900">{money(quote.subtotal)}</dd></div>
-                <div className="flex justify-between"><dt className="text-gray-600">Shipping</dt><dd className="text-gray-900">{quote.shipping ? money(quote.shipping) : "Free"}</dd></div>
-                {quote.discount > 0 && <div className="flex justify-between text-green-700"><dt>Discount ({coupon?.code})</dt><dd>−{money(quote.discount)}</dd></div>}
-                <div className="flex justify-between border-t border-gray-200 pt-3 text-base font-bold text-gray-900"><dt>Total</dt><dd>{money(quote.total)}</dd></div>
-                {quote.savings > 0 && <p className="text-xs font-medium text-green-700">You save {money(quote.savings)} with {coupon?.code}.</p>}
-                {freeShippingGap > 0 && <p className="text-xs text-gray-500">Add {money(freeShippingGap)} more for free shipping.</p>}
+                <div className="flex justify-between"><dt className="text-gray-600">Subtotal</dt><dd className="text-gray-900">{formatInr(quote.subtotal)}</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-600">Shipping</dt><dd className="text-gray-900">{quote.shipping ? formatInr(quote.shipping) : "Free"}</dd></div>
+                {quote.discount > 0 && <div className="flex justify-between text-green-700"><dt>Discount ({coupon?.code})</dt><dd>−{formatInr(quote.discount)}</dd></div>}
+                <div className="flex justify-between border-t border-gray-200 pt-3 text-base font-bold text-gray-900"><dt>Total</dt><dd>{formatInr(quote.total)}</dd></div>
+                {quote.savings > 0 && <p className="text-xs font-medium text-green-700">You save {formatInr(quote.savings)} with {coupon?.code}.</p>}
+                {freeShippingGap > 0 && <p className="text-xs text-gray-500">Add {formatInr(freeShippingGap)} more for free shipping.</p>}
               </>
             ) : (
               <div className="space-y-2" role="status" aria-label="Calculating total">

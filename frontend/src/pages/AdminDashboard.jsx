@@ -11,13 +11,13 @@ import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
 import { beautyCategories } from "../data/beautyCategories.js";
 import { productImage } from "../imageUrl.js";
 import { usePageMeta } from "../usePageMeta.js";
+import { formatInr } from "../money.js";
 
 // The shared list holds { name, description, icon } for the home page; the admin form needs names.
 const categoryNames = beautyCategories.map((category) => category.name);
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // the server's upload limit
 const emptyProduct = { name: "", description: "", price: "", category: "Skincare", stock: "" };
-const money = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
 function AdminDashboard() {
   const { user } = useContext(AuthContext);
@@ -186,10 +186,10 @@ function AdminDashboard() {
           ["Customers", stats?.totalUser],
           ["Orders", stats?.totalOrder],
           ["Products", stats?.totalProduct],
-          ["Paid revenue", stats ? money(stats.totalRevenue) : null],
+          ["Paid revenue", stats ? formatInr(stats.totalRevenue) : null],
           ["Paid orders", stats?.paidOrderCount],
-          ["This month", stats ? money(stats.revenueThisMonth) : null],
-          ["Average order value", stats ? money(stats.averageOrderValue) : null],
+          ["This month", stats ? formatInr(stats.revenueThisMonth) : null],
+          ["Average order value", stats ? formatInr(stats.averageOrderValue) : null],
         ].map(([label, value]) => (
           <article className="rounded-xl border border-gray-200 bg-white p-5" key={label}>
             <p className="text-sm text-gray-500">{label}</p>
@@ -207,7 +207,7 @@ function AdminDashboard() {
                 <h2 className="text-lg font-semibold text-gray-900">Sales overview</h2>
                 <p className="mt-1 text-sm text-gray-500">Paid revenue over the last 7 days</p>
               </div>
-              <p className="text-sm text-gray-500">Previous month: <span className="font-semibold text-gray-900">{money(stats.revenueLastMonth)}</span></p>
+              <p className="text-sm text-gray-500">Previous month: <span className="font-semibold text-gray-900">{formatInr(stats.revenueLastMonth)}</span></p>
             </div>
             <div className="mt-6 grid h-52 grid-cols-7 items-end gap-3 border-b border-gray-200 px-1">
               {(stats.salesLast7Days || []).map((day) => {
@@ -215,9 +215,9 @@ function AdminDashboard() {
                 const barHeight = day.revenue > 0 ? Math.max((day.revenue / maxRevenue) * 100, 5) : 0;
                 return (
                   <div className="flex h-full flex-col items-center justify-end gap-2" key={day.date}>
-                    <span className="text-center text-[10px] text-gray-500">{day.revenue ? money(day.revenue) : "-"}</span>
+                    <span className="text-center text-[10px] text-gray-500">{day.revenue ? formatInr(day.revenue) : "-"}</span>
                     <div className="flex h-36 w-full items-end">
-                      <div className="w-full rounded-t-md bg-brand-500 transition-all" style={{ height: `${barHeight}%` }} title={`${day.date}: ${money(day.revenue)}, ${day.orders} orders`} role="img" aria-label={`${day.date}: ${money(day.revenue)} revenue, ${day.orders} orders`} />
+                      <div className="w-full rounded-t-md bg-brand-500 transition-all" style={{ height: `${barHeight}%` }} title={`${day.date}: ${formatInr(day.revenue)}, ${day.orders} orders`} role="img" aria-label={`${day.date}: ${formatInr(day.revenue)} revenue, ${day.orders} orders`} />
                     </div>
                     <span className="pb-2 text-xs text-gray-500">{new Date(`${day.date}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", timeZone: "UTC" })}</span>
                   </div>
@@ -228,7 +228,7 @@ function AdminDashboard() {
               {(stats.revenueByMonth || []).map((month) => (
                 <div key={month.month}>
                   <p className="text-xs text-gray-500">{new Date(`${month.month}-01T00:00:00Z`).toLocaleDateString("en-IN", { month: "short", year: "2-digit", timeZone: "UTC" })}</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-gray-900" title={money(month.revenue)}>{money(month.revenue)}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-gray-900" title={formatInr(month.revenue)}>{formatInr(month.revenue)}</p>
                 </div>
               ))}
             </div>
@@ -262,7 +262,7 @@ function AdminDashboard() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">#{index + 1}</p>
                     <p className="mt-2 truncate font-semibold text-gray-900" title={item.name}>{item.name}</p>
                     <p className="mt-1 text-sm text-gray-500">{item.unitsSold} sold</p>
-                    <p className="mt-2 text-sm font-semibold text-gray-800">{money(item.revenue)}</p>
+                    <p className="mt-2 text-sm font-semibold text-gray-800">{formatInr(item.revenue)}</p>
                   </div>
                 ))}
               </div>
@@ -325,7 +325,7 @@ function AdminDashboard() {
                 <img className="h-16 w-16 rounded-lg bg-gray-50 object-contain" src={productImage(item.imageUrls, 64)} alt="" width="64" height="64" loading="lazy" decoding="async" />
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate font-semibold text-gray-900">{item.name}</h3>
-                  <p className="text-sm text-gray-500">{item.category} | {money(item.price)} | {item.stock} in stock</p>
+                  <p className="text-sm text-gray-500">{item.category} | {formatInr(item.price)} | {item.stock} in stock</p>
                 </div>
                 <button className="rounded-lg px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50" type="button" onClick={() => startEditing(item)}>Edit</button>
                 <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteProduct(item._id)}>Delete</button>
@@ -362,7 +362,7 @@ function AdminDashboard() {
                 <p className="mt-1 text-sm text-gray-500">{order.user?.name || "Customer"} | {order.user?.email || ""} | {new Date(order.createdAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</p>
                 <p className="mt-2 text-sm text-gray-700">{order.items.map((item) => `${item.productId?.name || "Product"} x ${item.qty}`).join(", ")}</p>
               </div>
-              <p className="font-semibold text-gray-900">{money(order.totalAmount)}</p>
+              <p className="font-semibold text-gray-900">{formatInr(order.totalAmount)}</p>
               <label className="sr-only" htmlFor={`status-${order._id}`}>Order status</label>
               <select className="rounded-lg border border-gray-300 px-3 py-2 capitalize" id={`status-${order._id}`} value={order.status} onChange={(event) => updateStatus(order._id, event.target.value)}>
                 {["pending", "shipped", "delivered"].map((status) => <option className="capitalize" key={status} value={status}>{status}</option>)}

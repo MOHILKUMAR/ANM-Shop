@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import { usePageMeta } from "../usePageMeta.js";
+import { formatInr } from "../money.js";
 
 const formatMoney = (amount) => `INR ${Number(amount || 0).toFixed(2)}`;
 const orderDate = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
-const inr = (amount) => Number(amount || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
 // Subtotal, shipping and discount for orders that have them; empty for older orders.
 const breakdownLines = (order) => (order.subtotalAmount === undefined || order.subtotalAmount === null ? [] : [
@@ -218,23 +218,23 @@ function OrderHistory() {
                 {order.items.map((item, index) => (
                   <li className="flex items-center justify-between gap-4 py-3 text-sm" key={`${item.productId?._id || item.productId}-${index}`}>
                     <span className="text-gray-700">{item.productId?.name || "Product"} × {item.qty}</span>
-                    <span className="font-medium text-gray-900">{(Number(item.price) * item.qty).toLocaleString("en-IN", { style: "currency", currency: "INR" })}</span>
+                    <span className="font-medium text-gray-900">{formatInr(Number(item.price) * item.qty)}</span>
                   </li>
                 ))}
               </ul>
               <div className="border-t border-gray-100 pt-4">
                 {order.subtotalAmount !== undefined && order.subtotalAmount !== null && (
                   <dl className="mb-2 space-y-1 text-sm">
-                    <div className="flex justify-between"><dt className="text-gray-600">Subtotal</dt><dd className="text-gray-900">{inr(order.subtotalAmount)}</dd></div>
-                    <div className="flex justify-between"><dt className="text-gray-600">Shipping</dt><dd className="text-gray-900">{order.shippingFee ? inr(order.shippingFee) : "Free"}</dd></div>
+                    <div className="flex justify-between"><dt className="text-gray-600">Subtotal</dt><dd className="text-gray-900">{formatInr(order.subtotalAmount)}</dd></div>
+                    <div className="flex justify-between"><dt className="text-gray-600">Shipping</dt><dd className="text-gray-900">{order.shippingFee ? formatInr(order.shippingFee) : "Free"}</dd></div>
                     {order.discountAmount > 0 && (
-                      <div className="flex justify-between text-green-700"><dt>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</dt><dd>−{inr(order.discountAmount)}</dd></div>
+                      <div className="flex justify-between text-green-700"><dt>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</dt><dd>−{formatInr(order.discountAmount)}</dd></div>
                     )}
                   </dl>
                 )}
                 <div className="flex justify-between font-semibold text-gray-900">
                   <span>Total paid</span>
-                  <span>{inr(order.totalAmount)}</span>
+                  <span>{formatInr(order.totalAmount)}</span>
                 </div>
               </div>
               <p className="mt-3 text-sm text-gray-500">Delivering to {order.address?.city}, {order.address?.country}{order.address?.phone ? ` | ${order.address.phone}` : ""}</p>
