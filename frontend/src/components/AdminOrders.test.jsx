@@ -104,3 +104,18 @@ test("a failed refund retry keeps its instructions on screen after the list relo
   await waitFor(() => expect(screen.queryByText("Loading orders")).toBeNull());
   expect(screen.getByRole("alert").textContent).toMatch(/then press Retry to record it/);
 });
+
+test("moving to another page clears a message about an order on this one", async () => {
+  makeOrders(25);
+  orders[0].status = "cancelled";
+  orders[0].refund = { status: "failed", amount: 249, error: "Razorpay refused it", requestedAt: "2026-10-10T00:00:00.000Z" };
+  render(<AdminOrders token="test" />);
+  await waitFor(() => expect(pager()).toBe("Page 1 of 2"));
+
+  fireEvent.click(screen.getByRole("button", { name: "Retry refund" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/refund failed again/));
+  await waitFor(() => expect(screen.queryByText("Loading orders")).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(pager()).toBe("Page 2 of 2"));
+  expect(screen.queryByRole("alert")).toBeNull();
+});

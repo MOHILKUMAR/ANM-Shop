@@ -171,6 +171,12 @@ test('admins deleting a customer get the same checks', async () => {
     const confirming = await api().delete(`/api/auth/users/${customer.user._id}`).set(admin.auth);
     assert.equal(confirming.status, 409);
     assert.match(confirming.body.message, /^A payment from this customer is still being confirmed/);
+
+    // It couldn't become an order and is being refunded.
+    await PaymentIntent.updateOne({ razorpayOrderId: checkout.body.razorpayOrderId }, { $set: { status: 'refund_pending' } });
+    const refunding = await api().delete(`/api/auth/users/${customer.user._id}`).set(admin.auth);
+    assert.equal(refunding.status, 409);
+    assert.match(refunding.body.message, /^A payment from this customer that couldn’t become an order is being refunded/);
     await PaymentIntent.updateOne({ razorpayOrderId: checkout.body.razorpayOrderId }, { $set: { status: 'refunded' } });
 
     assert.equal((await api().delete(`/api/auth/users/${customer.user._id}`).set(admin.auth)).status, 200);

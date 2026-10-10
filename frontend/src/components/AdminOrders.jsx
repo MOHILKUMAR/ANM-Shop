@@ -78,6 +78,14 @@ function AdminOrders({ token, onChanged }) {
     onChanged?.();
   }
 
+  // A message about an order on this page would be out of place on the next one.
+  function goToPage(next) {
+    setLoading(true);
+    setNotice("");
+    setError("");
+    setPage(next);
+  }
+
   function changeFilter(next) {
     setLoading(true);
     setNotice("");
@@ -248,9 +256,9 @@ function AdminOrders({ token, onChanged }) {
 
       {pagination?.pages > 1 && (
         <nav className="flex items-center justify-center gap-4" aria-label="Order pages">
-          <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40" type="button" disabled={page <= 1 || loading} onClick={() => { setLoading(true); setPage((current) => current - 1); }}>Previous</button>
+          <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40" type="button" disabled={page <= 1 || loading} onClick={() => goToPage(page - 1)}>Previous</button>
           <span className="text-sm text-gray-600">Page {pagination.page} of {pagination.pages}</span>
-          <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40" type="button" disabled={page >= pagination.pages || loading} onClick={() => { setLoading(true); setPage((current) => current + 1); }}>Next</button>
+          <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40" type="button" disabled={page >= pagination.pages || loading} onClick={() => goToPage(page + 1)}>Next</button>
         </nav>
       )}
     </section>
