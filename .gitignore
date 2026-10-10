@@ -3,6 +3,9 @@ node_modules/
 frontend/dist/
 backend/uploads/*
 !backend/uploads/.gitkeep
+# Built by docs/source/build.js and review.js
+docs/source/doc.html
+docs/source/review/
 
 # Local environment variables (keep the example templates)
 .env

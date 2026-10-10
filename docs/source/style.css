@@ -1,0 +1,81 @@
+@page { size: A4; margin: 16mm 15mm 18mm; }
+@page { @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8.5pt "Segoe UI", Arial, sans-serif; color: #8a7b83; } }
+@page { @bottom-left { content: "ANM-Shop · Project documentation"; font: 8.5pt "Segoe UI", Arial, sans-serif; color: #8a7b83; } }
+@page cover { margin: 0; @bottom-right { content: none; } @bottom-left { content: none; } }
+
+:root {
+  --ink: #2a1f25; --muted: #6b5d65; --line: #e6dcdf; --soft: #fbf5f4; --soft2: #f6eef0;
+  --brand: #754656; --brand-dark: #3d2733; --brand-mid: #ac6d7e; --gold: #b8873f; --gold-soft: #fbf3e2;
+  --ok: #2f7a4d; --warn: #9a5b12; --bad: #a33a3a;
+}
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font: 9.6pt/1.5 "Segoe UI", Arial, sans-serif; color: var(--ink); background: #fff; }
+
+/* Cover */
+.cover { page: cover; height: 297mm; position: relative; overflow: hidden; break-after: page;
+  background: linear-gradient(160deg, #3d2733 0%, #573443 48%, #754656 100%); color: #fff; padding: 34mm 22mm 20mm; }
+.cover::before { content: ""; position: absolute; width: 150mm; height: 150mm; right: -50mm; top: -45mm; border-radius: 50%; border: 1px solid rgba(223,189,123,.35); }
+.cover::after { content: ""; position: absolute; width: 100mm; height: 100mm; right: -18mm; top: -12mm; border-radius: 50%; border: 1px solid rgba(223,189,123,.25); }
+.cover .logo { background: #fff; border-radius: 18px; padding: 10px 16px; display: inline-block; }
+.cover .eyebrow { margin-top: 36mm; font-size: 10pt; letter-spacing: .28em; text-transform: uppercase; color: #dfbd7b; font-weight: 600; }
+.cover h1 { font: 600 34pt/1.15 Georgia, "Times New Roman", serif; margin: 6mm 0 4mm; max-width: 150mm; }
+.cover .sub { font-size: 12.5pt; color: rgba(255,255,255,.82); max-width: 150mm; }
+.cover .meta { position: absolute; left: 22mm; right: 22mm; bottom: 22mm; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6mm;
+  border-top: 1px solid rgba(255,255,255,.25); padding-top: 6mm; font-size: 9pt; }
+.cover .meta b { display: block; color: #dfbd7b; font-size: 7.5pt; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 1mm; }
+
+/* Headings & text */
+h1.part { font: 600 21pt/1.2 Georgia, serif; color: var(--brand-dark); margin: 0 0 2mm; padding-bottom: 2.5mm; border-bottom: 2px solid var(--brand); break-after: avoid; }
+.part-label { font-size: 8pt; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-bottom: 1mm; }
+section.chapter { break-before: page; }
+h2 { font: 600 13.5pt/1.3 Georgia, serif; color: var(--brand); margin: 6mm 0 2mm; break-after: avoid; }
+h3 { font-size: 10.5pt; color: var(--brand-dark); margin: 4mm 0 1.5mm; break-after: avoid; }
+p { margin: 0 0 2.2mm; }
+.lead { font-size: 10.6pt; color: var(--muted); margin-bottom: 4mm; }
+ul, ol { margin: 0 0 2.5mm; padding-left: 5mm; }
+li { margin-bottom: .8mm; }
+code, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.6pt; background: var(--soft2); padding: 0 1.2mm; border-radius: 3px; color: #5a2f3f; }
+a { color: var(--brand); text-decoration: none; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 1.5mm 0 4mm; font-size: 8.6pt; break-inside: auto; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { background: var(--brand); color: #fff; text-align: left; font-weight: 600; padding: 1.6mm 2mm; }
+td { padding: 1.4mm 2mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:nth-child(even) td { background: #fdfafa; }
+td code { white-space: nowrap; }
+.method { font: 700 7.5pt Consolas, monospace; padding: .4mm 1.4mm; border-radius: 3px; color: #fff; display: inline-block; min-width: 11mm; text-align: center; }
+.GET { background: #2f6f8f; } .POST { background: #2f7a4d; } .PUT { background: #9a6a12; } .PATCH { background: #7a5ea8; } .DELETE { background: #a33a3a; }
+.tag { display: inline-block; font-size: 7.4pt; padding: .2mm 1.4mm; border-radius: 8px; background: var(--soft2); color: var(--brand); margin: 0 .6mm .4mm 0; white-space: nowrap; }
+.tag.admin { background: #f7e3e3; color: #8a2f2f; } .tag.auth { background: #e5f0ea; color: #2f6a47; } .tag.limit { background: var(--gold-soft); color: #7a5520; } .tag.public { background: #e8eef5; color: #2f5a7a; }
+
+/* Boxes */
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin: 2mm 0 4mm; }
+.cards.two { grid-template-columns: repeat(2, 1fr); }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 3mm 3.5mm; background: #fff; break-inside: avoid; }
+.card h4 { margin: 0 0 1mm; font-size: 9.6pt; color: var(--brand-dark); }
+.card p, .card li { font-size: 8.7pt; color: var(--muted); }
+.card .k { font: 600 15pt Georgia, serif; color: var(--brand); }
+.note { border-left: 3px solid var(--gold); background: var(--gold-soft); padding: 2.4mm 3.5mm; border-radius: 0 6px 6px 0; margin: 2mm 0 4mm; font-size: 8.9pt; break-inside: avoid; }
+.note b { color: #7a5520; }
+figure { margin: 2mm 0 5mm; break-inside: avoid; }
+figure svg { width: 100%; height: auto; max-height: 205mm; display: block; }
+table.api { table-layout: fixed; }
+table.api th:nth-child(1) { width: 17mm; }
+table.api th:nth-child(2) { width: 62mm; }
+table.api th:nth-child(3) { width: 40mm; }
+table.api td code { white-space: normal; word-break: break-all; }
+section.chapter.flow { break-before: auto; margin-top: 12mm; }
+figcaption { font-size: 8.2pt; color: var(--muted); margin-top: 1.5mm; text-align: center; font-style: italic; }
+.toc { columns: 2; column-gap: 10mm; font-size: 9.6pt; }
+.toc div { break-inside: avoid; margin-bottom: 3mm; }
+.toc a { color: var(--ink); } .toc b a { color: var(--brand); }
+.toc .s { padding-left: 5mm; color: var(--muted); font-size: 8.8pt; }
+.toc .s a { color: var(--muted); }
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps > li { counter-increment: step; position: relative; padding-left: 8mm; margin-bottom: 1.6mm; }
+.steps > li::before { content: counter(step); position: absolute; left: 0; top: .2mm; width: 5.2mm; height: 5.2mm; border-radius: 50%; background: var(--brand); color: #fff; font-size: 7.6pt; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.avoid { break-inside: avoid; }
+.small { font-size: 8.4pt; color: var(--muted); }

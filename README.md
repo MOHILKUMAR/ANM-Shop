@@ -15,7 +15,7 @@ plus an admin dashboard to run the shop.
 | --- | --- |
 | `frontend/` | React 19 + Vite 8 + Tailwind CSS 4 storefront and admin dashboard, hosted on Vercel |
 | `backend/` | Node 22 + Express 5 + Mongoose 9 REST API, hosted on Render |
-| `docs/` | Project documentation (PDF) |
+| `docs/` | Project documentation (PDF); its sources and build steps are in `docs/source/` |
 | `render.yaml` | Render blueprint for the API |
 
 **Services:** MongoDB Atlas (database, needs a replica set for transactions), Razorpay
