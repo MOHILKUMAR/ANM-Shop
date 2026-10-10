@@ -301,14 +301,14 @@ ${table(['PR', 'Date', 'Change'], [
   ['#29–#30', '10 Oct', 'Third edition of this document, and its sources in <code>docs/source/</code>'],
   ['#31', '10 Oct', 'CI: GitHub Actions runs the API tests and the shop’s lint, tests and build on every pull request; branch protection then made both checks required on <code>main</code>'],
   ['#32', '10 Oct', 'E-bill and password-changed emails show India time (the server runs in UTC); tagged <code>v0.9.0</code>, the pre-launch release'],
-  ['#33', '10 Oct', 'Business details and a grievance officer on the Contact page, footer, Terms and Privacy policy, shown once filled in'],
+  ['#33', '10 Oct', 'Business details on the Contact page, footer, Terms and Privacy policy, and a grievance officer on the Contact page, Terms and Privacy policy, each shown once filled in'],
   ['#34', '10 Oct', 'The seller on the PDF bill and the e-bill email; long PDF bills keep their closing lines on the page'],
   ['next', '10 Oct', 'This fourth edition of the documentation'],
 ], 'history')}
 `);
 
 const ch14 = chapter('limitations', 14, 'Known limitations and next steps', `
-<p class="lead">Fixed since the first edition: hard-coded categories, regex-only search, single product photos, unpaged admin lists, no cancel or return, admin-only account deletion, script-only admins, partial CSP, no tests, template README, unused packages. Since the second edition: the footer jumping while pages load, search missing partial words, dead links to renamed categories, refund and account-deletion gaps found in code reviews, and no frontend tests. Since the third edition: no CI, emails showing the server’s UTC time, no business details or grievance officer, and long PDF bills losing their last line.</p>
+<p class="lead">Fixed since the first edition: hard-coded categories, regex-only search, single product photos, unpaged admin lists, no cancel or return, admin-only account deletion, script-only admins, partial CSP, no tests, template README, unused packages. Since the second edition: the footer jumping while pages load, search missing partial words, dead links to renamed categories, refund and account-deletion gaps found in code reviews, and no frontend tests. Since the third edition: no CI, emails showing the server’s UTC time, no place for business details or a grievance officer (they still need filling in), and long PDF bills losing their last line.</p>
 ${table(['Area', 'Limitation', 'Suggested next step'], [
   ['Orders', 'Refunds are always the full amount; returns are requested through a ticket; no email when an order ships or is delivered; deleting an order record does not refund.', 'Partial refunds per item, an in-app return request, shipping emails.'],
   ['Checkout refunds', 'If an automatic refund for a checkout (item sold out while paying) fails, it must be refunded in the Razorpay dashboard.', 'Show those payment records with a retry button, as orders have.'],
@@ -318,8 +318,8 @@ ${table(['Area', 'Limitation', 'Suggested next step'], [
   ['Admin scale', 'The Users tab loads every account at once.', 'Page and search the user list on the server.'],
   ['SEO', 'Tags are set in the browser, so link previews show the defaults; domains are hard-coded (also in the CSP).', 'Pre-render product pages; move domains to config.'],
   ['AI assistant', 'Free Gemini tier: quota / busy errors, and content may be used by Google.', 'Paid tier for production traffic.'],
-  ['Launch', 'Razorpay is still in test mode, and the business details and grievance officer ship empty (nothing shows until they are filled in, in the site’s file and the API’s).', 'Fill in the details, switch Razorpay to live mode, place and refund one real order, then tag <code>v1.0.0</code>.'],
-  ['Testing', '54 API tests and 23 frontend component tests (admin Orders, Tickets and Search tabs, Contact and policy pages, PDF bill), run by GitHub Actions on every pull request; checkout, account and other screens are checked by hand.', 'Cover checkout and account screens.'],
+  ['Launch', 'Razorpay is still in test mode, and the business details and grievance officer ship empty (nothing shows until they are filled in: the business in both the site’s file and the API’s, the officer in the site’s only).', 'Fill in the details, switch Razorpay to live mode, place and refund one real order, then tag <code>v1.0.0</code>.'],
+  ['Testing', '54 API tests and 23 frontend component tests (admin Orders, Tickets and Search tabs, Contact, Terms and Privacy pages, footer, PDF bill), run by GitHub Actions on every pull request; checkout, account and other screens are checked by hand.', 'Cover checkout and account screens.'],
   ['Small known issues', 'The README’s “Known limitations” section lists the small issues left on purpose (rare, or harmless at the shop’s size), each with a workaround: e.g. an unsaved refund not alerting admins, coupon limits reset by re-registering, unused photos left in Cloudinary.', 'Fix them as the shop grows; the README says when each starts to matter.'],
   ['Tooling', 'nodemon (development only) has an advisory whose suggested fix is a 2017 downgrade.', 'Replace it with <code>node --watch</code>.'],
 ])}

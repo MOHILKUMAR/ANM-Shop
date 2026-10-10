@@ -50,7 +50,7 @@ ${table(['Technology', 'Version', 'Used for'], [
   ['write-excel-file', '4.1.1', 'Admin user list export to .xlsx (loaded only when used)'],
   ['@vercel/analytics, @vercel/speed-insights', '2.0.1 / 2.0.0', 'Cookie-free visit and speed data, only after consent'],
   ['ESLint (flat config)', '10.7.0', 'Linting with react-hooks and react-refresh rules'],
-  ['Vitest · React Testing Library · jsdom', '5.0.3 · 16.3.3 · 29.0.2 (dev)', 'Component tests of the admin Orders, Tickets and Search tabs against a faked API (<code>npm test</code>)'],
+  ['Vitest · React Testing Library · jsdom', '5.0.3 · 16.3.3 · 29.0.2 (dev)', 'Component tests of the admin Orders, Tickets and Search tabs, the Contact, Terms and Privacy pages, the footer and the PDF bill, against a faked API (<code>npm test</code>)'],
 ])}
 <p class="small">Production builds first check that the Content-Security-Policy in <code>vercel.json</code> matches the inline theme script (<code>scripts/csp-hash.mjs</code>).</p>
 <h2>Backend</h2>
@@ -98,7 +98,7 @@ ${table(['Service', 'Role in ANM-Shop'], [
 <li><code>index.html</code> default SEO tags, preconnects, theme script</li>
 <li><code>public/</code> icons, og-image.png, robots.txt, web manifest</li>
 <li><code>src/App.jsx</code> router and layout; <code>src/index.jsx</code> providers</li>
-<li><code>src/pages/</code> 19 pages, and tests for the Contact and policy pages and the PDF bill</li>
+<li><code>src/pages/</code> 19 pages, and tests for the Contact, Terms and Privacy pages, the footer and the PDF bill</li>
 <li><code>src/components/</code> shared UI, product gallery and 7 admin tabs; <code>*.test.jsx</code> component tests</li>
 <li><code>src/context/</code> AuthProvider, CartProvider</li>
 <li><code>src/data/</code> contact info and business details, review maths, ticket labels</li>
@@ -123,7 +123,7 @@ ${fig(D.hld, 'Figure 3.1 — System architecture: who talks to whom')}
 </ol>
 <h2>3.2 Deployment</h2>
 ${fig(D.deploy, 'Figure 3.2 — How code reaches production')}
-<p>Every pull request first runs two GitHub Actions checks (<code>.github/workflows/ci.yml</code>, Node 22, no secrets): <b>API tests</b>, and the shop's <b>lint, tests and build</b> (the build also checks the Content-Security-Policy hash). Branch protection on <code>main</code> keeps the merge button disabled until both pass; an admin can bypass it only by ticking a box. Each merge runs the checks again on <code>main</code>. Releases are tagged on GitHub: <code>v0.9.0</code> marks the pre-launch code, and <code>v1.0.0</code> is planned for the day live payments start.</p>
+<p>Every pull request first runs two GitHub Actions checks (<code>.github/workflows/ci.yml</code>, Node 22, no secrets): <b>API tests</b>, and the shop's <b>lint, tests and build</b> (the build also checks the Content-Security-Policy hash). Branch protection on <code>main</code> keeps the merge button disabled until both pass; admins are exempt (they can tick a bypass box when merging, or push to <code>main</code> directly). Each merge runs the checks again on <code>main</code>. Releases are tagged on GitHub: <code>v0.9.0</code> marks the pre-launch code, and <code>v1.0.0</code> is planned for the day live payments start.</p>
 <p>Both halves deploy from the same GitHub repository. Vercel builds <code>frontend/</code>; Render follows <code>render.yaml</code>: root <code>backend</code>, build <code>npm ci --omit=dev</code>, start <code>npm start</code>, health check <code>GET /</code>, <code>NODE_ENV=production</code>, <code>TRUST_PROXY=1</code> and a generated <code>JWT_SECRET</code>. Other secrets are entered once in the Render dashboard. On start the API connects to MongoDB, runs two safe fix-ups and then starts listening. In production it refuses to start if <code>JWT_SECRET</code> is weak or <code>FRONTEND_URL</code> is missing or not HTTPS.</p>
 <h2>3.3 Key design decisions</h2>
 <div class="cards two">
@@ -276,8 +276,8 @@ ${fig(D.frontend, 'Figure 6.2 — Component tree and shared helpers')}
 <li><b>usePageMeta</b> sets the title, description, canonical URL, Open Graph and Twitter tags per page, and <code>noindex</code> on private pages.</li>
 <li><b>useCategories</b> is a small shared store (<code>useSyncExternalStore</code>): the categories load once for every page; the admin Categories tab, or an old category link, refreshes them, and only the newest answer is used.</li>
 <li><b>Page loading:</b> the footer sits inside the same <code>Suspense</code> boundary as the pages and loading placeholders fill the screen, so the footer no longer jumps down while a page arrives.</li>
-<li><b>Tests:</b> <code>npm test</code> in <code>frontend/</code> renders the admin Orders, Tickets and Search tabs in jsdom against a fake API that follows the server's rules, the Contact and policy pages with sample business details, and the PDF bill with jsPDF faked.</li>
-<li><b>Business details:</b> <code>src/data/contactInfo.js</code> holds the legal name, address, phone and GSTIN, and the grievance officer. They ship empty; each part appears on the Contact page, footer, Terms, Privacy policy and PDF bill only once it is filled in.</li>
+<li><b>Tests:</b> <code>npm test</code> in <code>frontend/</code> renders the admin Orders, Tickets and Search tabs in jsdom against a fake API that follows the server's rules, the Contact, Terms and Privacy pages and the footer with sample business details, and the PDF bill with jsPDF faked.</li>
+<li><b>Business details:</b> <code>src/data/contactInfo.js</code> holds the legal name, address, phone and GSTIN, and the grievance officer. They ship empty. The business appears once its legal name and address are filled in: on the Contact page, footer (name and phone), Terms, Privacy policy and PDF bill. The grievance officer appears once their name, designation and email are filled in: on the Contact page, Terms and Privacy policy.</li>
 </ul>
 `);
 
