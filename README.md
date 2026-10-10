@@ -90,9 +90,11 @@ build, on every pull request and on each push to `main`. It uses no secrets.
   Update them if either domain changes.
 - **Business details:** before taking real orders, fill in `business` and `grievanceOfficer` in
   `frontend/src/data/contactInfo.js` (legal name, address, phone, GSTIN; the grievance officer's
-  name, email and phone). They ship empty, and each part appears on the Contact page, footer,
-  Terms and Privacy policy only once it is filled in. Update the "Last updated" dates on those
-  policy pages when you do.
+  name, designation, email and phone). They ship empty. The business appears on the Contact
+  page, footer, Terms and Privacy policy once its legal name and address are filled in; the
+  grievance officer appears on the Contact page, Terms and Privacy policy once their name,
+  designation and email are. Update the "Last updated" dates on the Terms and Privacy pages
+  when you do. The PDF bill and the e-bill email don't show these details yet.
 - **Content-Security-Policy:** if you edit the small inline script in `frontend/index.html`, run
   `npm run csp-hash` and put the new hash in `vercel.json` (the build fails until you do).
 

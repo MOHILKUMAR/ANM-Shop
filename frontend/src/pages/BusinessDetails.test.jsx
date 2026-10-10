@@ -1,18 +1,22 @@
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Contact from "./Contact.jsx";
 import Terms from "./Terms.jsx";
 import PrivacyPolicy from "./PrivacyPolicy.jsx";
 import Footer from "../components/Footer.jsx";
-import { business, grievanceOfficer } from "../data/contactInfo.js";
+import { business, grievanceOfficer, supportEmail } from "../data/contactInfo.js";
 
-// Sample details for these tests only. The real ones go in data/contactInfo.js, which ships
-// empty so that nothing made up appears on the live shop.
+// Sample details for these tests only; the real ones go in data/contactInfo.js. Every test
+// starts from empty details, so the tests pass whatever that file holds.
 const sampleBusiness = { legalName: "Example Beauty Traders", address: "12 Sample Road, Delhi, Delhi 110001", phone: "+91 90000 00000", gstin: "GSTIN-SAMPLE-0001" };
-const sampleOfficer = { name: "Asha Example", designation: "Proprietor", email: "grievance@example.com", phone: "+91 90000 00001" };
+const sampleOfficer = { name: "Asha Example", designation: "Proprietor", email: "grievance@example.com", phone: "+91 90000 00001", acknowledgeWithin: "48 hours", resolveWithin: "one month" };
 
 const original = { business: { ...business }, grievanceOfficer: { ...grievanceOfficer } };
+beforeEach(() => {
+  Object.assign(business, { legalName: "", address: "", phone: "", gstin: "" });
+  Object.assign(grievanceOfficer, { name: "", designation: "", email: "", phone: "" });
+});
 afterEach(() => {
   cleanup();
   Object.assign(business, original.business);
@@ -21,11 +25,6 @@ afterEach(() => {
 
 const show = (page) => render(<MemoryRouter>{page}</MemoryRouter>);
 const sectionOf = (heading) => screen.getByRole("heading", { name: heading }).closest("section");
-
-test("the shop ships with no business or grievance details filled in", () => {
-  expect(business).toMatchObject({ legalName: "", address: "", phone: "", gstin: "" });
-  expect(grievanceOfficer).toMatchObject({ name: "", designation: "", email: "", phone: "" });
-});
 
 test("while the details are empty, none of the new sections appear", () => {
   show(<Contact />);
@@ -48,8 +47,8 @@ test("while the details are empty, none of the new sections appear", () => {
 });
 
 test("half-filled details stay hidden", () => {
-  Object.assign(business, { legalName: sampleBusiness.legalName }); // no address yet
-  Object.assign(grievanceOfficer, { name: sampleOfficer.name }); // no email yet
+  Object.assign(business, { legalName: sampleBusiness.legalName, address: "   " }); // no address yet
+  Object.assign(grievanceOfficer, { name: sampleOfficer.name, email: sampleOfficer.email }); // no designation yet
   show(<Contact />);
   expect(screen.queryByRole("heading", { name: "Business details" })).toBeNull();
   expect(screen.queryByRole("heading", { name: "Grievance officer" })).toBeNull();
@@ -84,15 +83,47 @@ test("once filled in, the footer, Terms and Privacy policy name the business and
   cleanup();
 
   show(<Terms />);
-  const whoWeAre = sectionOf("Who we are");
-  expect(whoWeAre.textContent).toContain("ANM-Shop is run by Example Beauty Traders, 12 Sample Road, Delhi, Delhi 110001 (GSTIN GSTIN-SAMPLE-0001).");
+  expect(sectionOf("Who we are").textContent).toContain("ANM-Shop is run by Example Beauty Traders, 12 Sample Road, Delhi, Delhi 110001 (GSTIN GSTIN-SAMPLE-0001).");
   expect(within(sectionOf("Contact")).getByRole("link", { name: sampleOfficer.email })).toBeTruthy();
   cleanup();
 
   show(<PrivacyPolicy />);
   expect(sectionOf("Who we are").textContent).toContain("customers in India, run by Example Beauty Traders, 12 Sample Road");
   const complaints = sectionOf("Grievance officer");
-  expect(complaints.textContent).toContain("Asha Example, Proprietor");
+  expect(complaints.textContent).toContain("contact our grievance officer: Asha Example, Proprietor, grievance@example.com, +91 90000 00001.");
   expect(complaints.textContent).toContain("within 48 hours and resolve it within one month");
-  expect(within(complaints).getByRole("link", { name: sampleOfficer.email })).toBeTruthy();
+});
+
+test("optional fields left empty leave no gaps", () => {
+  Object.assign(business, { ...sampleBusiness, phone: "", gstin: "" });
+  Object.assign(grievanceOfficer, { ...sampleOfficer, phone: "" });
+
+  show(<Contact />);
+  expect(screen.queryByText("GSTIN")).toBeNull();
+  expect(screen.queryByText("Phone")).toBeNull();
+  cleanup();
+
+  show(<Terms />);
+  expect(sectionOf("Who we are").querySelector("p").textContent).toBe(`ANM-Shop is run by Example Beauty Traders, 12 Sample Road, Delhi, Delhi 110001. You can reach us at ${supportEmail}.`);
+  cleanup();
+
+  show(<PrivacyPolicy />);
+  expect(sectionOf("Grievance officer").textContent).toContain("Asha Example, Proprietor, grievance@example.com. We acknowledge");
+});
+
+test("stray spaces are trimmed, and a name ending in a full stop doesn't get a second one", () => {
+  Object.assign(business, { legalName: "  ABC Traders Pvt. Ltd. ", address: " 12 Sample Road, Delhi 110001. ", phone: "", gstin: "" });
+  Object.assign(grievanceOfficer, { ...sampleOfficer, email: " grievance@example.com " });
+
+  show(<Footer />);
+  expect(screen.getByText(/ANM-Shop, run by ABC Traders Pvt\. Ltd\. All rights reserved\./)).toBeTruthy();
+  cleanup();
+
+  show(<Terms />);
+  expect(sectionOf("Who we are").textContent).toContain("ANM-Shop is run by ABC Traders Pvt. Ltd., 12 Sample Road, Delhi 110001. You can");
+  cleanup();
+
+  show(<PrivacyPolicy />);
+  expect(sectionOf("Who we are").textContent).toContain("run by ABC Traders Pvt. Ltd., 12 Sample Road, Delhi 110001. This policy");
+  expect(within(sectionOf("Grievance officer")).getByRole("link", { name: "grievance@example.com" }).getAttribute("href")).toBe("mailto:grievance@example.com");
 });

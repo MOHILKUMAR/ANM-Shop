@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import logo from "../assets/anm-shop-logo.svg";
-import { supportEmail, linkedinProfile, business, showBusinessDetails } from "../data/contactInfo.js";
+import { supportEmail, linkedinProfile, businessInfo, showBusinessDetails, withoutFinalStop } from "../data/contactInfo.js";
 import { OPEN_CONSENT_EVENT } from "../consent.js";
 
 function Footer() {
   const showBusiness = showBusinessDetails();
+  const business = businessInfo();
   return (
     <footer className="border-t border-gray-200 bg-white">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
@@ -38,7 +39,7 @@ function Footer() {
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-900">Get in touch</h2>
           <a className="mt-4 inline-block break-all text-sm text-gray-600 hover:text-brand-700" href={`mailto:${supportEmail}`}>{supportEmail}</a>
-          {showBusiness && business.phone.trim() && (
+          {showBusiness && business.phone && (
             <a className="mt-3 block text-sm text-gray-600 hover:text-brand-700" href={`tel:${business.phone.replace(/[^\d+]/g, "")}`}>{business.phone}</a>
           )}
           <a className="mt-3 block text-sm text-gray-600 hover:text-brand-700" href={linkedinProfile} target="_blank" rel="noreferrer">LinkedIn profile</a>
@@ -46,7 +47,7 @@ function Footer() {
       </div>
       <div className="border-t border-gray-200">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <p>© {new Date().getFullYear()} ANM-Shop{showBusiness && `, run by ${business.legalName}`}. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} ANM-Shop{showBusiness && `, run by ${withoutFinalStop(business.legalName)}`}. All rights reserved.</p>
           <button className="w-fit text-left text-gray-500 underline-offset-2 hover:text-brand-700 hover:underline" type="button" onClick={() => window.dispatchEvent(new Event(OPEN_CONSENT_EVENT))}>
             Privacy choices
           </button>

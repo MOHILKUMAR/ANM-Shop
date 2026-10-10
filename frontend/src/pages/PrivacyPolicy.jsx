@@ -1,4 +1,4 @@
-import { supportEmail, business, grievanceOfficer, showBusinessDetails, showGrievanceOfficer } from "../data/contactInfo.js";
+import { supportEmail, businessInfo, grievanceInfo, showBusinessDetails, showGrievanceOfficer, withoutFinalStop } from "../data/contactInfo.js";
 import { usePageMeta } from "../usePageMeta.js";
 import { OPEN_CONSENT_EVENT } from "../consent.js";
 
@@ -6,8 +6,8 @@ const mail = <a className="font-medium text-brand-700 underline" href={`mailto:$
 
 // Built on each render: the business and grievance officer details appear once they are filled
 // in (data/contactInfo.js).
-const sections = () => [
-  ["Who we are", <>ANM-Shop is an online beauty store for customers in India{showBusinessDetails() && <>, run by {business.legalName}, {business.address}</>}. This policy explains what personal information we collect when you use the store, why, who helps us process it, and the choices you have. Contact us about it at {mail}.</>],
+const sections = (business = businessInfo(), grievanceOfficer = grievanceInfo()) => [
+  ["Who we are", <>ANM-Shop is an online beauty store for customers in India{showBusinessDetails() && <>, run by {business.legalName}, {withoutFinalStop(business.address)}</>}. This policy explains what personal information we collect when you use the store, why, who helps us process it, and the choices you have. Contact us about it at {mail}.</>],
   ["Information we collect", <>
     <strong>Account:</strong> your name, email address, and password (stored only as a one-way hash), plus short-lived verification codes and password-reset links, also stored as hashes.{" "}
     <strong>Orders:</strong> the products you buy, your delivery address and mobile number, the amount paid, any coupon used, and the Razorpay order and payment IDs.{" "}
@@ -24,7 +24,7 @@ const sections = () => [
   ["How long we keep it", <>We keep your account until you delete it (Account settings → Delete account) or ask us to. When an account is deleted, its chat history and reviews are deleted too; orders, payment records, and support tickets are kept as business and tax records for as long as the law requires. Records of unpaid checkouts can be deleted after 24 hours.</>],
   ["Security", <>The store is served only over HTTPS. Passwords are hashed with bcrypt, sign-in sessions expire, changing your password signs you out everywhere else, and access to customer records is limited to authorised administrators. No online service can be completely secure, so please use a strong password that you don't use anywhere else.</>],
   ["Your rights", <>Under India's Digital Personal Data Protection Act, 2023 and other applicable law, you can ask to see the personal information we hold about you, to correct it, or to delete it, and you can withdraw consent you have given (such as for analytics). You can delete your account yourself in Account settings; for anything else, email {mail} from your account's address and we will respond within 30 days. If you are unhappy with our response, you may complain to the Data Protection Board of India.</>],
-  showGrievanceOfficer() && ["Grievance officer", <>For a complaint about how we handle your personal information, or about an order or product, contact our grievance officer: {grievanceOfficer.name}{grievanceOfficer.designation.trim() && <>, {grievanceOfficer.designation}</>}, <a className="font-medium text-brand-700 underline" href={`mailto:${grievanceOfficer.email}`}>{grievanceOfficer.email}</a>{grievanceOfficer.phone.trim() && <>, {grievanceOfficer.phone}</>}. We acknowledge every complaint within {grievanceOfficer.acknowledgeWithin} and resolve it within {grievanceOfficer.resolveWithin}.</>],
+  showGrievanceOfficer() && ["Grievance officer", <>For a complaint about how we handle your personal information, or about an order or product, contact our grievance officer: {grievanceOfficer.name}, {grievanceOfficer.designation}, <a className="font-medium text-brand-700 underline" href={`mailto:${grievanceOfficer.email}`}>{grievanceOfficer.email}</a>{grievanceOfficer.phone && <>, {grievanceOfficer.phone}</>}. We acknowledge every complaint within {grievanceOfficer.acknowledgeWithin} and resolve it within {grievanceOfficer.resolveWithin}.</>],
   ["Children", <>ANM-Shop is intended for adults aged 18 and over. We do not knowingly collect information from children; if you believe a child has created an account, contact us and we will delete it.</>],
   ["Changes to this policy", <>If we change how we use your information, we will update this page and change the date at the top. For significant changes we will also tell you by email or on the site.</>],
 ];

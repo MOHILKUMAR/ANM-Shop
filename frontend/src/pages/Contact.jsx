@@ -1,4 +1,4 @@
-import { supportEmail, linkedinProfile, business, grievanceOfficer, showBusinessDetails, showGrievanceOfficer } from "../data/contactInfo.js";
+import { supportEmail, linkedinProfile, businessInfo, grievanceInfo, showBusinessDetails, showGrievanceOfficer } from "../data/contactInfo.js";
 import { usePageMeta } from "../usePageMeta.js";
 
 const linkClass = "font-medium text-brand-700 underline";
@@ -16,6 +16,8 @@ function Detail({ label, children }) {
 function Contact() {
   const showBusiness = showBusinessDetails();
   const showGrievance = showGrievanceOfficer();
+  const business = businessInfo();
+  const grievanceOfficer = grievanceInfo();
   usePageMeta({
     title: "Contact us",
     description: "Questions about a product, an order, or a return? Email ANM-Shop support or open a ticket and we'll get back to you.",
@@ -49,9 +51,9 @@ function Contact() {
               <dl className="mt-4 space-y-3">
                 <Detail label="Legal name">{business.legalName}</Detail>
                 <Detail label="Registered address">{business.address}</Detail>
-                {business.phone.trim() && <Detail label="Phone"><a className={linkClass} href={telHref(business.phone)}>{business.phone}</a></Detail>}
+                {business.phone && <Detail label="Phone"><a className={linkClass} href={telHref(business.phone)}>{business.phone}</a></Detail>}
                 <Detail label="Email"><a className={`${linkClass} break-all`} href={`mailto:${supportEmail}`}>{supportEmail}</a></Detail>
-                {business.gstin.trim() && <Detail label="GSTIN">{business.gstin}</Detail>}
+                {business.gstin && <Detail label="GSTIN">{business.gstin}</Detail>}
               </dl>
             </section>
           )}
@@ -62,9 +64,9 @@ function Contact() {
                 For a complaint about an order, a product, or how we handle your personal information. We acknowledge every complaint within {grievanceOfficer.acknowledgeWithin} and resolve it within {grievanceOfficer.resolveWithin}.
               </p>
               <dl className="mt-4 space-y-3">
-                <Detail label="Name">{grievanceOfficer.name}{grievanceOfficer.designation.trim() && `, ${grievanceOfficer.designation}`}</Detail>
+                <Detail label="Name">{`${grievanceOfficer.name}, ${grievanceOfficer.designation}`}</Detail>
                 <Detail label="Email"><a className={`${linkClass} break-all`} href={`mailto:${grievanceOfficer.email}`}>{grievanceOfficer.email}</a></Detail>
-                {grievanceOfficer.phone.trim() && <Detail label="Phone"><a className={linkClass} href={telHref(grievanceOfficer.phone)}>{grievanceOfficer.phone}</a></Detail>}
+                {grievanceOfficer.phone && <Detail label="Phone"><a className={linkClass} href={telHref(grievanceOfficer.phone)}>{grievanceOfficer.phone}</a></Detail>}
               </dl>
             </section>
           )}

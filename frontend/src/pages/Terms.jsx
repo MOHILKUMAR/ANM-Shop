@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
-import { supportEmail, business, grievanceOfficer, showBusinessDetails, showGrievanceOfficer } from "../data/contactInfo.js";
+import { supportEmail, businessInfo, grievanceInfo, showBusinessDetails, showGrievanceOfficer, withoutFinalStop } from "../data/contactInfo.js";
 import { usePageMeta } from "../usePageMeta.js";
 
 // Built on each render: the business and grievance officer sections appear once their details
 // are filled in (data/contactInfo.js).
-const sections = () => [
-  showBusinessDetails() && ["Who we are", <>ANM-Shop is run by {business.legalName}, {business.address}{business.gstin.trim() && <> (GSTIN {business.gstin})</>}. You can reach us at <a className="font-medium text-brand-700 underline" href={`mailto:${supportEmail}`}>{supportEmail}</a>{business.phone.trim() && <> or {business.phone}</>}.</>],
+const sections = (business = businessInfo(), grievanceOfficer = grievanceInfo()) => [
+  showBusinessDetails() && ["Who we are", <>ANM-Shop is run by {business.legalName}, {business.gstin ? <>{business.address} (GSTIN {business.gstin})</> : withoutFinalStop(business.address)}. You can reach us at <a className="font-medium text-brand-700 underline" href={`mailto:${supportEmail}`}>{supportEmail}</a>{business.phone && <> or {business.phone}</>}.</>],
   ["About these terms", <>These terms apply when you browse ANM-Shop, create an account, or place an order. By using the store you agree to them, together with our <Link className="font-medium text-brand-700 underline" to="/privacy">Privacy policy</Link> and <Link className="font-medium text-brand-700 underline" to="/returns">Returns and refunds policy</Link>. If you do not agree, please do not use the store.</>],
   ["Your account", <>You need an account with a verified email address to place orders, write reviews, and use support. Keep your password private; you are responsible for activity on your account. Tell us straight away at {supportEmail} if you think someone else has used it. We may suspend or close accounts that break these terms or are used for fraud or abuse.</>],
   ["Products and prices", <>We describe products and show their pictures as accurately as we can, but colours and packaging may differ slightly from what you see on screen. Prices are in Indian rupees (₹) and are confirmed by our server at checkout; the amount shown on the payment button is the amount charged. If a product sells out or a price is wrong, we may cancel the order and refund you in full.</>],
