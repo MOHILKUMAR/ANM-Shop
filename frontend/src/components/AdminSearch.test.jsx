@@ -33,3 +33,25 @@ test("a pending checkout with a payment ID shows as paid but being confirmed", a
   expect(within(confirming).getByText("Paid, being confirmed")).toBeTruthy();
   expect(within(abandoned).getByText("Awaiting payment")).toBeTruthy();
 });
+
+test("a customer's payment history shows the same labels", async () => {
+  apiRequest.mockResolvedValue({
+    query: "priya@example.com",
+    orders: [],
+    payments: [],
+    customers: [{
+      user: { _id: "u1", name: "Priya", email: "priya@example.com", role: "user", verified: true },
+      orderCount: 0,
+      totalSpent: 0,
+      orders: [],
+      payments: [checkout("64b0aa000000000000000003", "pay_confirming2")],
+    }],
+  });
+  render(<AdminSearch token="test" />);
+  fireEvent.change(screen.getByLabelText("Search orders, payments, and customers"), { target: { value: "priya@example.com" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+  await waitFor(() => expect(screen.getByText("Payment history")).toBeTruthy());
+  const history = screen.getByText("Payment history").nextElementSibling;
+  expect(within(history).getByText("Paid, being confirmed")).toBeTruthy();
+});

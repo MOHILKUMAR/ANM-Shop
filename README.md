@@ -91,8 +91,9 @@ The first `npm test` downloads a MongoDB binary for the in-memory database (cach
 ## Operating notes
 
 - A refund that Razorpay refuses emails the admins and appears under **Refund problems** on the
-  Orders tab with a **Retry refund** button; one interrupted by a restart appears there after 10
-  minutes (without an email). Retrying first checks Razorpay, so a refund that already went
+  Orders tab with a **Retry refund** button (if the database also fails to record the refusal,
+  it shows as "in progress" and appears there after 10 minutes); one interrupted by a restart
+  appears there after 10 minutes (without an email). Retrying first checks Razorpay, so a refund that already went
   through, or one made by hand in the Razorpay dashboard, is recorded instead of repeated.
   Checkout refunds that fail are logged as `AUTOMATIC REFUND FAILED` and need refunding in
   Razorpay.
@@ -105,14 +106,18 @@ Small issues found in code reviews and left on purpose, because they are rare or
 the shop's current size. Each says when it matters and what to do meanwhile.
 
 **Refunds and payments**
-- **A refund that went through but couldn't be saved alerts nobody.** If Razorpay accepts a
-  refund and the database write right after it fails, no email goes out, although the customer
-  is told "We've been alerted". After 10 minutes the order appears under **Refund problems**;
-  **Retry refund** then finds the refund at Razorpay and records it (no second refund).
+- **A refund that went through but couldn't be saved doesn't alert the admins.** If Razorpay
+  accepts a refund and the database write right after it fails, the admins aren't emailed,
+  although the customer is told "We've been alerted" (and gets the usual "refund being
+  arranged" email). After 10 minutes the order appears under **Refund problems**; **Retry
+  refund** then finds the refund at Razorpay and records it (no second refund).
 - **Account deletion and a payment can cross in the same instant.** If a customer deletes their
   account at the exact moment Razorpay confirms a payment, an order can still be created for
-  the deleted account (it shows as "Deleted account"). Cancel it from the Orders tab to refund
-  it. A payment confirmed even slightly later is refunded automatically.
+  the deleted account. On the Orders tab it shows as "Customer" with no email (the Search tab
+  says "Deleted account"). Cancel it from the Orders tab to refund it. No email can reach the
+  customer, so use the phone number in the order's delivery address (search for the order on
+  the Search tab) if they need telling. A payment confirmed even slightly later is refunded
+  automatically.
 - **The "interrupted refund" check uses the admin's computer clock.** If that clock is several
   minutes off, an interrupted refund can show "in progress" without a Retry button (clock
   behind) or offer Retry a little early, which answers "no failed refund to retry" (clock
@@ -128,24 +133,33 @@ the shop's current size. Each says when it matters and what to do meanwhile.
 - **Keyboard focus resets after a reply moves a ticket.** When a reply moves the ticket to page
   1 of the Tickets tab, the list follows it with its thread open, but keyboard focus goes back
   to the top of the page.
-- **Removed product photos stay in Cloudinary.** Photos removed from a product, and uploads from
-  a product save that failed, are never deleted from Cloudinary. This only uses storage; tidy
-  the `anm-shop/products` folder in Cloudinary now and then if space runs low.
+- **Unused product photos stay in Cloudinary.** Photos removed from a product, the photos of
+  deleted products, and uploads from a product save that failed are never deleted from
+  Cloudinary. This only uses storage. Don't delete files from the `anm-shop/products` folder by
+  hand: it also holds every photo the shop still shows, and nothing marks which ones are
+  unused. Deleting a photo that a product still uses breaks it on the shop pages.
+- **"Paid, being confirmed" doesn't expire on the Search tab.** A checkout that was paid but
+  never confirmed (for example a payment Razorpay later voided) keeps that label. Before
+  deleting such a record, check the payment in the Razorpay dashboard: if Razorpay captures it
+  after the record is gone, the shop ignores it, so no order is created and it has to be
+  refunded by hand. If the dashboard already shows it as captured but the shop has no order for
+  it (Razorpay couldn't reach the shop), refund it by hand there too.
 
 **Shop pages**
 - **Search reads every product.** Partial-word matching ("lip" finding "Lipstick") checks every
   product's name and description on each search. That is instant for a few hundred products;
   with tens of thousands, search-as-you-type would slow down and needs a search service (for
   example MongoDB Atlas Search).
-- **Search pages can repeat or skip a product.** Products created in the same millisecond (for
-  example in one bulk import) have no fixed order, so paging through search results can show
-  one twice and miss another.
+- **Product lists can repeat or skip a product.** Products created in the same millisecond (for
+  example in one bulk import) have no fixed order, so paging through the shop, a category,
+  search results or the admin product list can show one twice and miss another.
 - **A stale category error on the home page.** If reloading the category list fails after it
   has loaded once (a network blip), the home page can show "Categories could not be loaded"
   above the working category tiles until the page is reloaded.
-- **Long PDF bills can lose their last line.** On a bill with about 15 or more items plus a
-  discount and a refund, the closing "Thank you" line can fall off the bottom of the page, and
-  the refund line can land in the printer's margin. The items and totals are unaffected.
+- **Some PDF bills lose their last line.** When the list of items ends near the bottom of a page
+  (for example a bill with 15 or 16 items, a discount and a refund), the closing "Thank you"
+  line can fall off the page and the refund line can land in the printer's margin. Most bills
+  print fine, and the items and totals are never affected.
 
 Larger features that aren't built yet (partial refunds, emails when an order ships, the paid
 Gemini tier, a shared rate-limit store, httpOnly cookie sessions) are covered in the project

@@ -156,6 +156,34 @@ test('a failing admin alert doesn\'t fail the customer\'s cancellation', async (
     }
 });
 
+test('if a refused refund can\'t even be recorded, the cancellation still succeeds and shows up later', async () => {
+    const customer = await createUser();
+    const admin = await createUser({ role: 'admin' });
+    const order = await placeOrder(customer, [line(await createProduct())]);
+    sentEmails.length = 0;
+    razorpay.failRefunds = true;
+    const realUpdate = Order.findByIdAndUpdate;
+    let failedWrites = 0;
+    Order.findByIdAndUpdate = function updateFailingForFailedRefunds(id, update, ...rest) {
+        if (update?.$set?.['refund.status'] === 'failed') {
+            failedWrites += 1;
+            return Promise.reject(new Error('database unavailable'));
+        }
+        return realUpdate.call(this, id, update, ...rest);
+    };
+    try {
+        const cancelled = await api().post(`/api/orders/${order._id}/cancel`).set(customer.auth);
+        assert.equal(cancelled.status, 200);
+        assert.equal(failedWrites, 1, 'recording the failure was attempted (and failed)');
+    } finally {
+        Order.findByIdAndUpdate = realUpdate;
+    }
+    const saved = await Order.findById(order._id);
+    assert.equal(saved.status, 'cancelled');
+    assert.equal(saved.refund.status, 'pending', 'left pending: it shows under Refund problems after 10 minutes');
+    assert.ok(await eventually(() => sentEmails.some((email) => email.to === admin.user.email && /Refund failed/.test(email.subject))), 'the admins are still alerted');
+});
+
 test('a failing "order cancelled" email doesn\'t report the cancellation as failed', async () => {
     const customer = await createUser();
     const admin = await createUser({ role: 'admin' });
