@@ -94,7 +94,8 @@ build, on every pull request and on each push to `main`. It uses no secrets.
   page, footer, Terms and Privacy policy once its legal name and address are filled in; the
   grievance officer appears on the Contact page, Terms and Privacy policy once their name,
   designation and email are. Update the "Last updated" dates on the Terms and Privacy pages
-  when you do. The PDF bill and the e-bill email don't show these details yet.
+  when you do. The PDF bill reads the same file; for the e-bill email, put the same business
+  values in `backend/config/business.js` (a test fails while the two files differ).
 - **Content-Security-Policy:** if you edit the small inline script in `frontend/index.html`, run
   `npm run csp-hash` and put the new hash in `vercel.json` (the build fails until you do).
 
@@ -166,10 +167,6 @@ the shop's current size. Each says when it matters and what to do meanwhile.
 - **A stale category error on the home page.** If reloading the category list fails after it
   has loaded once (a network blip), the home page can show "Categories could not be loaded"
   above the working category tiles until the page is reloaded.
-- **Some PDF bills lose their last line.** When the list of items ends near the bottom of a page
-  (for example a bill with 15 or 16 items, a discount and a refund), the closing "Thank you"
-  line can fall off the page and the refund line can land in the printer's margin. Most bills
-  print fine, and the items and totals are never affected.
 
 Larger features that aren't built yet (partial refunds, emails when an order ships, the paid
 Gemini tier, a shared rate-limit store, httpOnly cookie sessions) are covered in the project

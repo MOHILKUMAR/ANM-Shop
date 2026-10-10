@@ -3,9 +3,10 @@ export const linkedinProfile = "https://www.linkedin.com/in/mohil-kumar-dev";
 
 // The business behind the shop. Customers, Razorpay and India's e-commerce rules expect these
 // details on the site. Nothing shows until legalName and address are filled in; then they
-// appear on the Contact page, in the footer, in the Terms and in the Privacy policy. Leave a
-// field "" until you have the real value, and when you fill them in, update "Last updated" on
-// the Terms and Privacy pages.
+// appear on the Contact page, in the footer, in the Terms, in the Privacy policy and on the PDF
+// bill. Put the same values in backend/config/business.js for the e-bill email (a test fails
+// while the two differ). Leave a field "" until you have the real value, and when you fill them
+// in, update "Last updated" on the Terms and Privacy pages.
 export const business = {
   legalName: "", // the registered business name, or the proprietor's name
   address: "", // registered address on one line: street, city, state, PIN

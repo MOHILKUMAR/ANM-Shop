@@ -4,6 +4,7 @@ import { apiRequest } from "../api.js";
 import AuthContext from "../context/AuthContext.js";
 import { usePageMeta } from "../usePageMeta.js";
 import { formatInr } from "../money.js";
+import { businessInfo, showBusinessDetails } from "../data/contactInfo.js";
 
 const formatMoney = (amount) => `INR ${Number(amount || 0).toFixed(2)}`;
 const orderDate = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
@@ -68,6 +69,26 @@ async function downloadBill(order) {
     y += 6;
   }
 
+  // The seller, once its details are filled in (data/contactInfo.js).
+  if (showBusinessDetails()) {
+    const business = businessInfo();
+    const width = pageWidth - margin * 2;
+    y += 4;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.text("Sold by", margin, y);
+    y += 6;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    const sellerLines = [
+      ...pdf.splitTextToSize(business.legalName, width),
+      ...pdf.splitTextToSize(business.address, width),
+      [business.gstin && `GSTIN: ${business.gstin}`, business.phone && `Phone: ${business.phone}`].filter(Boolean).join("    "),
+    ].filter(Boolean);
+    pdf.text(sellerLines, margin, y);
+    y += sellerLines.length * 5 + 1;
+  }
+
   y += 4;
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(11);
@@ -118,13 +139,16 @@ async function downloadBill(order) {
     pdf.line(margin, y - 2, right, y - 2);
   }
 
-  if (y + 24 > pageHeight - 15) {
+  // The totals, any refund line and the closing line stay together, above the bottom margin.
+  const breakdown = breakdownLines(order);
+  const closingHeight = 8 + breakdown.length * 6 + (order.refund?.status ? 8 : 0) + 14;
+  if (y + closingHeight > pageHeight - 15) {
     pdf.addPage();
     y = 24;
   }
   y += 8;
   // Orders placed before shipping and coupons existed only have a total.
-  for (const [label, value] of breakdownLines(order)) {
+  for (const [label, value] of breakdown) {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
     pdf.setTextColor(113, 100, 108);
