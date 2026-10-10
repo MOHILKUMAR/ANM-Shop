@@ -106,8 +106,14 @@ const refreshVerifiedBuyer = async (order) => {
     }
 };
 
-// Tells the customer their order was cancelled or returned and what happens to their money.
-const sendClosedEmail = async (order) => {
+// Tells the customer their order was cancelled or returned and what happens to their money. Never
+// throws: by now the order is closed and refunded, so a failed email mustn't report a failure.
+const sendClosedEmail = (order) => sendClosedEmailOrThrow(order).catch((error) => {
+    console.error('Order closed email failed. Order:', String(order._id), error.message);
+    return false;
+});
+
+const sendClosedEmailOrThrow = async (order) => {
     const customer = await User.findById(order.user).select('email name').lean();
     if (!customer?.email) return false;
     const code = shortCode(order._id);

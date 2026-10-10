@@ -376,20 +376,20 @@ const removeAccount = async (user) => {
 // touched in the last day count, so a record left stuck by an outage can't block it for good.
 const RECENT_CHECKOUT_MS = 24 * 60 * 60 * 1000;
 const deletionBlocker = async (userId) => {
-    const [activeOrders, refundOwed, paymentInProgress] = await Promise.all([
+    const [activeOrders, refundOwed, checkout] = await Promise.all([
         Order.countDocuments({ user: userId, status: { $in: ['pending', 'shipped'] } }),
         Order.exists({ user: userId, 'refund.status': { $in: ['pending', 'failed'] } }),
         // Paid, but the order hasn't been created yet (Razorpay is still confirming it), or a
         // checkout that couldn't become an order is being refunded.
-        PaymentIntent.exists({
+        PaymentIntent.findOne({
             user: userId,
             updatedAt: { $gt: new Date(Date.now() - RECENT_CHECKOUT_MS) },
             $or: [{ status: 'pending', paymentId: { $type: 'string' } }, { status: 'refund_pending' }],
-        }),
+        }).select('status').lean(),
     ]);
     if (activeOrders) return { kind: 'orders', count: activeOrders };
     if (refundOwed) return { kind: 'refund' };
-    if (paymentInProgress) return { kind: 'payment' };
+    if (checkout) return { kind: checkout.status === 'refund_pending' ? 'checkoutRefund' : 'payment' };
     return null;
 };
 
@@ -417,6 +417,9 @@ const deleteUser = async (req, res) => {
         }
         if (blocker?.kind === 'payment') {
             return res.status(409).json({ message: 'A payment from this customer is still being confirmed. Try again in a few minutes.' });
+        }
+        if (blocker?.kind === 'checkoutRefund') {
+            return res.status(409).json({ message: 'A payment from this customer that couldn’t become an order is being refunded. Try again in a few minutes.' });
         }
         await removeAccount(user);
         return res.json({ message: 'Account deleted with their reviews. Their orders, payments, and tickets are kept as records.' });
@@ -486,6 +489,9 @@ const deleteMyAccount = async (req, res) => {
         }
         if (blocker?.kind === 'payment') {
             return res.status(409).json({ message: 'A payment of yours is still being confirmed. Try again in a few minutes, once its order appears on My orders.' });
+        }
+        if (blocker?.kind === 'checkoutRefund') {
+            return res.status(409).json({ message: 'A payment of yours that couldn’t become an order is being refunded. Try again in a few minutes.' });
         }
         await removeAccount(user);
         const text = `Hi ${user.name},\n\nYour ANM-Shop account (${user.email}) has been deleted, with your reviews and chat history. Records of past orders and payments are kept as the law requires.\n\nIf you didn't do this, contact us by replying to this email.`;

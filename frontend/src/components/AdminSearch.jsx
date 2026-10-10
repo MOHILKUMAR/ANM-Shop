@@ -8,6 +8,8 @@ const when = (date) => (date ? new Date(date).toLocaleString("en-IN", { dateStyl
 // Payment records are checkout attempts: most become orders, some are abandoned or refunded.
 const paymentStatus = {
   pending: ["Awaiting payment", "bg-gray-100 text-gray-700"],
+  // Pending with a payment ID: paid, and Razorpay is still confirming it (the order follows).
+  confirming: ["Paid, being confirmed", "bg-amber-50 text-amber-800"],
   completed: ["Paid", "bg-green-50 text-green-800"],
   refund_pending: ["Refund in progress", "bg-amber-50 text-amber-800"],
   refunded: ["Refunded", "bg-brand-50 text-brand-800"],
@@ -40,7 +42,8 @@ function DeleteButton({ label, onClick }) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ payment }) {
+  const status = payment.status === "pending" && payment.paymentId ? "confirming" : payment.status;
   const [label, className] = paymentStatus[status] || [status, "bg-gray-100 text-gray-700"];
   return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${className}`}>{label}</span>;
 }
@@ -110,7 +113,7 @@ function PaymentResult({ payment, onSearch, onDelete }) {
           <p className="mt-1 text-sm text-gray-500">{payment.user?.name || "Deleted account"} {payment.user?.email ? `| ${payment.user.email}` : ""}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={payment.status} />
+          <StatusBadge payment={payment} />
           <DeleteButton label="Delete record" onClick={() => onDelete("payment", payment)} />
         </div>
       </div>
@@ -175,7 +178,7 @@ function CustomerResult({ customer, onSearch, onDelete }) {
             <li className="flex flex-wrap items-center justify-between gap-3 py-2" key={payment._id}>
               <span className="text-gray-700">{when(payment.createdAt)} | {formatInr(payment.amountPaise / 100)}</span>
               <IdLink value={payment.paymentId || payment.razorpayOrderId} onSearch={onSearch} />
-              <StatusBadge status={payment.status} />
+              <StatusBadge payment={payment} />
             </li>
           ))}
         </ul>

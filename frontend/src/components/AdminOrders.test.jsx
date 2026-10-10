@@ -33,18 +33,22 @@ async function fakeApi(path, { method = "GET" } = {}) {
     const page = Number(url.searchParams.get("page")) || 1;
     if (holdLists && page === holdPage) await holdLists;
     const matching = orders.filter((order) => !status || order.status === status);
+    // Copies, like a real response: later changes on the "server" don't reach what is on screen.
     return {
-      orders: matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+      orders: structuredClone(matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)),
       counts: Object.fromEntries(STATUSES.map((value) => [value, orders.filter((order) => order.status === value).length])),
       refundProblems: 0,
       pagination: { page, limit: PAGE_SIZE, total: matching.length, pages: Math.ceil(matching.length / PAGE_SIZE) },
     };
   }
-  const [, id] = url.pathname.match(/^\/orders\/(\w+)\/cancel$/) || [];
+  const [, id, action] = url.pathname.match(/^\/orders\/(\w+)\/(cancel|refund)$/) || [];
   const order = orders.find((item) => item._id === id);
+  if (action === "refund") {
+    throw Object.assign(new Error("The refund failed again: Razorpay refused it. Refund it in the Razorpay dashboard, then press Retry to record it."), { status: 502 });
+  }
   order.status = "cancelled";
   order.refund = { status: "refunded", amount: order.totalAmount };
-  return { message: "Order cancelled.", order };
+  return { message: "Order cancelled.", order: structuredClone(order) };
 }
 
 beforeEach(() => {
@@ -79,9 +83,24 @@ test("emptying the last page shows the loading placeholder, not the old orders, 
   await waitFor(() => expect(apiRequest.mock.calls.slice(callsBefore).some(([path]) => path === "/orders?page=1&status=pending")).toBe(true));
   await new Promise((resolve) => { setTimeout(resolve, 50); });
   expect(screen.getByText("Loading orders")).toBeTruthy();
+  expect(screen.queryByText(/Item 21/)).toBeNull(); // the cancelled order's old row is gone
   expect(screen.queryAllByRole("button", { name: "Cancel & refund" })).toHaveLength(0);
 
   sendLists();
   await waitFor(() => expect(screen.getAllByRole("button", { name: "Cancel & refund" })).toHaveLength(20));
   expect(pager()).toBe("no pages");
+});
+
+test("a failed refund retry keeps its instructions on screen after the list reloads", async () => {
+  makeOrders(2);
+  orders[0].status = "cancelled";
+  orders[0].refund = { status: "failed", amount: 249, error: "Razorpay refused it", requestedAt: "2026-10-10T00:00:00.000Z" };
+  render(<AdminOrders token="test" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Retry refund" })).toBeTruthy());
+
+  const callsBefore = apiRequest.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Retry refund" }));
+  await waitFor(() => expect(apiRequest.mock.calls.length).toBeGreaterThan(callsBefore + 1)); // the retry and the reload
+  await waitFor(() => expect(screen.queryByText("Loading orders")).toBeNull());
+  expect(screen.getByRole("alert").textContent).toMatch(/then press Retry to record it/);
 });

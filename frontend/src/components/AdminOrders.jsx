@@ -32,7 +32,9 @@ function AdminOrders({ token, onChanged }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
+  // Kept apart, so a reload that works doesn't hide an action's error (e.g. a failed refund retry).
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [busyId, setBusyId] = useState("");
   // The order whose return is being confirmed, and whether its items go back on sale.
@@ -56,10 +58,10 @@ function AdminOrders({ token, onChanged }) {
           return;
         }
         setData({ ...result, loadedAt: Date.now() });
-        setError("");
+        setLoadError("");
       })
       .catch((requestError) => {
-        if (active) setError(requestError.message);
+        if (active) setLoadError(requestError.message);
       })
       .finally(() => {
         if (active && !movingPage) setLoading(false);
@@ -79,6 +81,7 @@ function AdminOrders({ token, onChanged }) {
   function changeFilter(next) {
     setLoading(true);
     setNotice("");
+    setError("");
     setPage(1);
     setStatus(next);
   }
@@ -172,6 +175,7 @@ function AdminOrders({ token, onChanged }) {
 
       {notice && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800" role="status">{notice}</p>}
       {error && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
+      {loadError && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{loadError}</p>}
       {loading && <ListSkeleton rows={4} label="Loading orders" />}
       {!loading && data?.orders.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders here yet.</p>}
 

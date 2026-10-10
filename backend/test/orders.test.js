@@ -135,19 +135,50 @@ test('a failing admin alert doesn\'t fail the customer\'s cancellation', async (
     sentEmails.length = 0;
     razorpay.failRefunds = true;
     const realFind = User.find;
+    let adminLookups = 0;
     User.find = function findFailingForAdmins(filter, ...rest) {
-        if (filter?.role === 'admin') throw new Error('database unavailable');
+        if (filter?.role === 'admin') {
+            adminLookups += 1;
+            throw new Error('database unavailable');
+        }
         return realFind.call(this, filter, ...rest);
     };
     try {
         const cancelled = await api().post(`/api/orders/${order._id}/cancel`).set(customer.auth);
         assert.equal(cancelled.status, 200);
-        assert.equal((await Order.findById(order._id)).status, 'cancelled');
+        const saved = await Order.findById(order._id);
+        assert.equal(saved.status, 'cancelled');
+        assert.equal(saved.refund.status, 'failed');
         assert.ok(sentEmails.some((email) => email.to === customer.user.email && /cancelled/.test(email.subject)), 'the customer is still told');
+        assert.ok(await eventually(() => adminLookups === 1), 'the alert was attempted (and failed)');
     } finally {
-        await new Promise((resolve) => { setTimeout(resolve, 100); }); // let the background alert finish failing
         User.find = realFind;
     }
+});
+
+test('a failing "order cancelled" email doesn\'t report the cancellation as failed', async () => {
+    const customer = await createUser();
+    const admin = await createUser({ role: 'admin' });
+    const order = await placeOrder(customer, [line(await createProduct())]);
+    const realFindById = User.findById;
+    let customerLookups = 0;
+    User.findById = function findByIdFailingForCustomer(id, ...rest) {
+        if (String(id) === String(customer.user._id)) {
+            customerLookups += 1;
+            throw new Error('database unavailable');
+        }
+        return realFindById.call(this, id, ...rest);
+    };
+    try {
+        const cancelled = await api().post(`/api/orders/${order._id}/cancel`).set(admin.auth);
+        assert.equal(cancelled.status, 200);
+        assert.equal(customerLookups, 1, 'the email lookup was attempted (and failed)');
+    } finally {
+        User.findById = realFindById;
+    }
+    const saved = await Order.findById(order._id);
+    assert.equal(saved.status, 'cancelled');
+    assert.equal(saved.refund.status, 'refunded');
 });
 
 test('retrying records a refund Razorpay already made instead of refunding again', async () => {
