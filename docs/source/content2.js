@@ -196,8 +196,8 @@ ${table(['Path', 'Page', 'Purpose'], [
   ['<code>/account</code>', 'Account (lazy)', 'Profile, My coupons, change password, delete account'],
   ['<code>/support</code>', 'Support (lazy)', 'Tickets, replies, open chat'],
   ['<code>/admin</code>', 'AdminDashboard (lazy)', 'Stats and 8 tabs; “Access denied” for non-admins'],
-  ['<code>/about</code> · <code>/contact</code>', 'About · Contact (lazy)', 'Brand story · support email and LinkedIn'],
-  ['<code>/privacy</code> · <code>/terms</code> · <code>/returns</code>', 'Policy pages (lazy)', 'Last updated 4 October 2026'],
+  ['<code>/about</code> · <code>/contact</code>', 'About · Contact (lazy)', 'Brand story · support email, LinkedIn, business details once filled in'],
+  ['<code>/privacy</code> · <code>/terms</code> · <code>/returns</code>', 'Policy pages (lazy)', 'Updated 4 Oct (Terms), 10 Oct 2026 (Privacy, Returns)'],
   ['<code>*</code>', 'NotFound (lazy)', '404 page, noindex'],
 ])}
 <div class="cards two">
@@ -249,7 +249,7 @@ ${table(['Variable', 'Where', 'Purpose'], [
 <li>Copy <code>backend/.env.example</code> to <code>backend/.env</code> and fill in at least <code>MONGO_URL</code> and <code>JWT_SECRET</code>; add Razorpay test keys, Cloudinary, email and Gemini keys for those features.</li>
 <li>Optional demo data: <code>cd backend && npm run seed</code> (44 products; running it again only adds missing ones and never overwrites dashboard changes; <code>node seed.js -d</code> removes them).</li>
 <li><code>npm run dev</code> starts the API on port 5000 and Vite on 5173; Vite proxies <code>/api</code> to the API.</li>
-<li><code>cd backend &amp;&amp; npm test</code> runs the 47 API tests on an in-memory MongoDB with a fake Razorpay; it never reads <code>.env</code> (the first run downloads the MongoDB binary). <code>cd frontend &amp;&amp; npm test</code> runs the 14 component tests in jsdom with the API faked.</li>
+<li><code>cd backend &amp;&amp; npm test</code> runs the 54 API tests on an in-memory MongoDB with a fake Razorpay; it never reads <code>.env</code> (the first run downloads the MongoDB binary). <code>cd frontend &amp;&amp; npm test</code> runs the 23 component tests in jsdom with the API faked. GitHub Actions runs both on every pull request.</li>
 <li>Sign up, then set <code>ADMIN_EMAIL</code> and run <code>npm run promote-admin</code> in <code>backend/</code> to get an admin account.</li>
 </ol>
 <h2>12.3 Scripts</h2>
@@ -272,7 +272,8 @@ ${table(['Where', 'Script', 'Does'], [
 <li>Check the Orders tab's <b>Refund problems</b> filter (admins are also emailed when a cancel or return refund fails) and use Retry refund. Watch Render logs for “AUTOMATIC REFUND FAILED” (checkout refunds: refund in the Razorpay dashboard).</li>
 <li>After editing the inline script in <code>index.html</code>, run <code>npm run csp-hash</code> and update <code>vercel.json</code>; the build stops until they match.</li>
 <li>Keep <code>FRONTEND_URL</code> (Render) and <code>VITE_API_URL</code> (Vercel) in step if either domain changes; the domains also appear in <code>index.html</code>, <code>robots.txt</code> and <code>vercel.json</code> (rewrite and CSP).</li>
-<li>Before releases run <code>npm test</code> in <code>backend/</code> and <code>frontend/</code>, <code>npm run lint</code> and <code>npm run build</code> (frontend), and a checkout with Razorpay test keys. Have each branch reviewed before it is merged.</li>
+<li>GitHub Actions runs the tests, lint and build on every pull request, and <code>main</code> requires both checks. Before a release, also try a checkout with Razorpay test keys, and have each branch reviewed before it is merged.</li>
+<li>Before taking real orders, fill in the business details and grievance officer in <code>frontend/src/data/contactInfo.js</code>, and the same business values in <code>backend/config/business.js</code> for the e-bill. A test fails while the two differ or if a value has a character the PDF bill's font can't print (₹, №, Hindi). Update the “Last updated” dates on the Terms and Privacy pages.</li>
 <li>Don't delete files from Cloudinary's <code>anm-shop/products</code> folder by hand: it holds every live product photo as well as unused ones.</li>
 </ul>
 `);
@@ -297,12 +298,17 @@ ${table(['PR', 'Date', 'Change'], [
   ['#25', '10 Oct', 'Admin Tickets tab reloads and follows a ticket after a reply; first frontend tests (Vitest)'],
   ['#26', '10 Oct', 'Background refund alerts, a 24-hour window and admin checks for account deletion, “paid but being confirmed”, Orders tab loading fix'],
   ['#27–#28', '10 Oct', 'Known limitations in the README, and small fixes from its review'],
-  ['next', '10 Oct', 'This third edition of the documentation'],
-])}
+  ['#29–#30', '10 Oct', 'Third edition of this document, and its sources in <code>docs/source/</code>'],
+  ['#31', '10 Oct', 'CI: GitHub Actions runs the API tests and the shop’s lint, tests and build on every pull request; branch protection then made both checks required on <code>main</code>'],
+  ['#32', '10 Oct', 'E-bill and password-changed emails show India time (the server runs in UTC); tagged <code>v0.9.0</code>, the pre-launch release'],
+  ['#33', '10 Oct', 'Business details on the Contact page, footer, Terms and Privacy policy, and a grievance officer on the Contact page, Terms and Privacy policy, each shown once filled in'],
+  ['#34', '10 Oct', 'The seller on the PDF bill and the e-bill email; long PDF bills keep their closing lines on the page'],
+  ['next', '10 Oct', 'This fourth edition of the documentation'],
+], 'history')}
 `);
 
 const ch14 = chapter('limitations', 14, 'Known limitations and next steps', `
-<p class="lead">Fixed since the first edition: hard-coded categories, regex-only search, single product photos, unpaged admin lists, no cancel or return, admin-only account deletion, script-only admins, partial CSP, no tests, template README, unused packages. Since the second edition: the footer jumping while pages load, search missing partial words, dead links to renamed categories, refund and account-deletion gaps found in code reviews, and no frontend tests.</p>
+<p class="lead">Fixed since the first edition: hard-coded categories, regex-only search, single product photos, unpaged admin lists, no cancel or return, admin-only account deletion, script-only admins, partial CSP, no tests, template README, unused packages. Since the second edition: the footer jumping while pages load, search missing partial words, dead links to renamed categories, refund and account-deletion gaps found in code reviews, and no frontend tests. Since the third edition: no CI, emails showing the server’s UTC time, no place for business details or a grievance officer (they still need filling in), and long PDF bills losing their last line.</p>
 ${table(['Area', 'Limitation', 'Suggested next step'], [
   ['Orders', 'Refunds are always the full amount; returns are requested through a ticket; no email when an order ships or is delivered; deleting an order record does not refund.', 'Partial refunds per item, an in-app return request, shipping emails.'],
   ['Checkout refunds', 'If an automatic refund for a checkout (item sold out while paying) fails, it must be refunded in the Razorpay dashboard.', 'Show those payment records with a retry button, as orders have.'],
@@ -312,11 +318,12 @@ ${table(['Area', 'Limitation', 'Suggested next step'], [
   ['Admin scale', 'The Users tab loads every account at once.', 'Page and search the user list on the server.'],
   ['SEO', 'Tags are set in the browser, so link previews show the defaults; domains are hard-coded (also in the CSP).', 'Pre-render product pages; move domains to config.'],
   ['AI assistant', 'Free Gemini tier: quota / busy errors, and content may be used by Google.', 'Paid tier for production traffic.'],
-  ['Testing', '47 API tests and 14 frontend component tests (admin Orders, Tickets and Search tabs); checkout, account and other screens are checked by hand; there is no CI.', 'Cover checkout and account screens; run every test in GitHub Actions on each pull request.'],
+  ['Launch', 'Razorpay is still in test mode, and the business details and grievance officer ship empty (nothing shows until they are filled in: the business in both the site’s file and the API’s, the officer in the site’s only).', 'Fill in the details, switch Razorpay to live mode, place and refund one real order, then tag <code>v1.0.0</code>.'],
+  ['Testing', '54 API tests and 23 frontend component tests (admin Orders, Tickets and Search tabs, Contact, Terms and Privacy pages, footer, PDF bill), run by GitHub Actions on every pull request; checkout, account and other screens are checked by hand.', 'Cover checkout and account screens.'],
   ['Small known issues', 'The README’s “Known limitations” section lists the small issues left on purpose (rare, or harmless at the shop’s size), each with a workaround: e.g. an unsaved refund not alerting admins, coupon limits reset by re-registering, unused photos left in Cloudinary.', 'Fix them as the shop grows; the README says when each starts to matter.'],
   ['Tooling', 'nodemon (development only) has an advisory whose suggested fix is a 2017 downgrade.', 'Replace it with <code>node --watch</code>.'],
 ])}
-<p class="small" style="margin-top:6mm">Third edition, updated on 10 October 2026 from the ANM-Shop repository up to pull request #28.</p>
+<p class="small" style="margin-top:6mm">Fourth edition, updated on 10 October 2026 from the ANM-Shop repository up to pull request #34.</p>
 `);
 
 module.exports = { ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14 };

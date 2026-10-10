@@ -10,7 +10,7 @@ const ch1 = chapter('overview', 1, 'Project overview', `
   <div class="card"><div class="k">60</div><p>REST API endpoints across 12 route areas</p></div>
   <div class="card"><div class="k">10</div><p>MongoDB data models (plus a <code>migrations</code> marker collection)</p></div>
   <div class="card"><div class="k">20</div><p>frontend routes served by 19 page components</p></div>
-  <div class="card"><div class="k">61</div><p>automated tests: 47 for the API on an in-memory database, 14 for admin screens in a simulated browser</p></div>
+  <div class="card"><div class="k">77</div><p>automated tests, run by GitHub Actions on every pull request: 54 for the API on an in-memory database, 23 for screens in a simulated browser</p></div>
   <div class="card"><div class="k">11</div><p>rate limiters protecting sign-in, email, payments, chat and more</p></div>
   <div class="card"><div class="k">7</div><p>default categories, managed by admins; 44 demo products in the seed data</p></div>
 </div>
@@ -26,16 +26,17 @@ const ch1 = chapter('overview', 1, 'Project overview', `
   <div class="card"><h4>Checkout &amp; payment</h4><p>Server-side pricing in paise, ₹49 shipping under ₹499, one coupon per order, Razorpay Checkout, signature checks, webhook backup, automatic refunds.</p></div>
   <div class="card"><h4>Orders</h4><p>Order history with price breakdown, PDF bills and e-bill emails; customers cancel unshipped orders and admins mark returns, both refunded automatically.</p></div>
   <div class="card"><h4>Support</h4><p>Tickets with threaded replies and email notices; a Gemini-powered assistant that reads the customer's own orders, payments and tickets, finds products and adds them to the cart.</p></div>
-  <div class="card"><h4>Launch-ready extras</h4><p>Privacy, terms and returns pages, SEO tags, sitemap, consent-gated analytics, a full Content-Security-Policy, dark mode, lazy pages (the footer no longer jumps while they load), resized images, spam protection, API and frontend tests.</p></div>
+  <div class="card"><h4>Launch-ready extras</h4><p>Privacy, terms and returns pages, SEO tags, sitemap, consent-gated analytics, a full Content-Security-Policy, dark mode, lazy pages (the footer no longer jumps while they load), resized images, spam protection, API and frontend tests run on every pull request, and business details and a grievance officer that appear once filled in.</p></div>
 </div>
 <h2>Where it runs</h2>
 ${table(['Part', 'Address', 'Hosting'], [
   ['Storefront (React app)', '<code>https://anm-shop.vercel.app</code>', 'Vercel (static build + CDN)'],
   ['API (Express)', '<code>https://anm-shop-api.onrender.com</code>', 'Render web service, free plan, Node 22'],
   ['Database', 'MongoDB Atlas', 'Managed replica set (needed for transactions)'],
-  ['Source code', '<code>github.com/MOHILKUMAR/ANM-Shop</code>', '<code>main</code> branch, up to pull request #28'],
+  ['Source code', '<code>github.com/MOHILKUMAR/ANM-Shop</code>', '<code>main</code> branch, up to pull request #34'],
+  ['Releases', 'GitHub tags', '<code>v0.9.0</code>: pre-launch (Razorpay still in test mode)'],
 ])}
-<div class="note"><b>Scope of this document.</b> Everything here was taken from the code as of 10 October 2026, up to pull request #28 (the “fix known limitations” work and the code-review fixes after it): <code>backend/</code>, <code>frontend/</code>, <code>render.yaml</code> and <code>frontend/vercel.json</code>. Secret values from <code>.env</code> files are not included; only the variable names are listed.</div>
+<div class="note"><b>Scope of this document.</b> Everything here was taken from the code as of 10 October 2026, up to pull request #34 (CI, India time in emails, and business details on the site and the bills): <code>backend/</code>, <code>frontend/</code>, <code>render.yaml</code> and <code>frontend/vercel.json</code>. Secret values from <code>.env</code> files are not included; only the variable names are listed.</div>
 `);
 
 const ch2 = chapter('stack', 2, 'Technology stack', `
@@ -49,7 +50,7 @@ ${table(['Technology', 'Version', 'Used for'], [
   ['write-excel-file', '4.1.1', 'Admin user list export to .xlsx (loaded only when used)'],
   ['@vercel/analytics, @vercel/speed-insights', '2.0.1 / 2.0.0', 'Cookie-free visit and speed data, only after consent'],
   ['ESLint (flat config)', '10.7.0', 'Linting with react-hooks and react-refresh rules'],
-  ['Vitest · React Testing Library · jsdom', '5.0.3 · 16.3.3 · 29.0.2 (dev)', 'Component tests of the admin Orders, Tickets and Search tabs against a faked API (<code>npm test</code>)'],
+  ['Vitest · React Testing Library · jsdom', '5.0.3 · 16.3.3 · 29.0.2 (dev)', 'Component tests of the admin Orders, Tickets and Search tabs, the Contact, Terms and Privacy pages, the footer and the PDF bill, against a faked API (<code>npm test</code>)'],
 ])}
 <p class="small">Production builds first check that the Content-Security-Policy in <code>vercel.json</code> matches the inline theme script (<code>scripts/csp-hash.mjs</code>).</p>
 <h2>Backend</h2>
@@ -84,7 +85,7 @@ ${table(['Service', 'Role in ANM-Shop'], [
 <div class="cards two">
 <div class="card"><h4>backend/</h4><ul>
 <li><code>app.js</code> middleware, routes, error handler; <code>index.js</code> start-up</li>
-<li><code>config/</code> MongoDB connection, Cloudinary setup</li>
+<li><code>config/</code> MongoDB connection, Cloudinary setup, business details for the e-bill</li>
 <li><code>test/</code> API tests (<code>npm test</code>)</li>
 <li><code>controller/</code> 12 controllers (auth, product, category, review, order, payment, coupon, ticket, chat, analytics, search, sitemap)</li>
 <li><code>middleware/</code> protect, admin, rate limiters, spam guard</li>
@@ -97,15 +98,15 @@ ${table(['Service', 'Role in ANM-Shop'], [
 <li><code>index.html</code> default SEO tags, preconnects, theme script</li>
 <li><code>public/</code> icons, og-image.png, robots.txt, web manifest</li>
 <li><code>src/App.jsx</code> router and layout; <code>src/index.jsx</code> providers</li>
-<li><code>src/pages/</code> 19 pages</li>
+<li><code>src/pages/</code> 19 pages, and tests for the Contact, Terms and Privacy pages, the footer and the PDF bill</li>
 <li><code>src/components/</code> shared UI, product gallery and 7 admin tabs; <code>*.test.jsx</code> component tests</li>
 <li><code>src/context/</code> AuthProvider, CartProvider</li>
-<li><code>src/data/</code> contact info, review maths, ticket labels</li>
+<li><code>src/data/</code> contact info and business details, review maths, ticket labels</li>
 <li>helpers: <code>api.js</code>, <code>useCategories.js</code>, <code>consent.js</code>, <code>imageUrl.js</code>, <code>money.js</code>, <code>usePageMeta.js</code></li>
 <li><code>vercel.json</code>, <code>vite.config.js</code>, <code>eslint.config.js</code>, <code>scripts/csp-hash.mjs</code></li>
 </ul></div>
 </div>
-<p class="small">The project root also holds <code>README.md</code>, <code>package.json</code> (runs both apps with <code>concurrently</code>) and <code>render.yaml</code> (Render blueprint).</p>
+<p class="small">The project root also holds <code>README.md</code>, <code>package.json</code> (runs both apps with <code>concurrently</code>), <code>render.yaml</code> (Render blueprint), <code>.github/workflows/ci.yml</code> (the CI checks) and <code>docs/</code> (this document and its sources).</p>
 `);
 
 const ch3 = chapter('hld', 3, 'High-level design (HLD)', `
@@ -122,6 +123,7 @@ ${fig(D.hld, 'Figure 3.1 — System architecture: who talks to whom')}
 </ol>
 <h2>3.2 Deployment</h2>
 ${fig(D.deploy, 'Figure 3.2 — How code reaches production')}
+<p>Every pull request first runs two GitHub Actions checks (<code>.github/workflows/ci.yml</code>, Node 22, no secrets): <b>API tests</b>, and the shop's <b>lint, tests and build</b> (the build also checks the Content-Security-Policy hash). Branch protection on <code>main</code> keeps the merge button disabled until both pass; admins are exempt (they can tick a bypass box when merging, or push to <code>main</code> directly). Each merge runs the checks again on <code>main</code>. Releases are tagged on GitHub: <code>v0.9.0</code> marks the pre-launch code, and <code>v1.0.0</code> is planned for the day live payments start.</p>
 <p>Both halves deploy from the same GitHub repository. Vercel builds <code>frontend/</code>; Render follows <code>render.yaml</code>: root <code>backend</code>, build <code>npm ci --omit=dev</code>, start <code>npm start</code>, health check <code>GET /</code>, <code>NODE_ENV=production</code>, <code>TRUST_PROXY=1</code> and a generated <code>JWT_SECRET</code>. Other secrets are entered once in the Render dashboard. On start the API connects to MongoDB, runs two safe fix-ups and then starts listening. In production it refuses to start if <code>JWT_SECRET</code> is weak or <code>FRONTEND_URL</code> is missing or not HTTPS.</p>
 <h2>3.3 Key design decisions</h2>
 <div class="cards two">
@@ -135,7 +137,7 @@ ${fig(D.deploy, 'Figure 3.2 — How code reaches production')}
 <h2>3.4 Quality attributes</h2>
 ${table(['Attribute', 'How it is achieved', 'Current limits'], [
   ['Security', 'helmet, full Content-Security-Policy, CORS allow-list, JWT + bcrypt, hashed codes and tokens, HMAC payment checks, spam guard, 11 rate limiters, input limits, HTML-escaped emails', 'Token kept in localStorage'],
-  ['Reliability', 'webhook backup, transactions, automatic refunds with retry (admins emailed and a Refund problems list when one fails), idempotent start-up fix-ups, Gemini retries and fallback model, 47 API and 14 frontend tests', 'Failed checkout refunds need a manual refund in Razorpay'],
+  ['Reliability', 'webhook backup, transactions, automatic refunds with retry (admins emailed and a Refund problems list when one fails), idempotent start-up fix-ups, Gemini retries and fallback model, 54 API and 23 frontend tests run on every pull request', 'Failed checkout refunds need a manual refund in Razorpay'],
   ['Performance', 'CDN, lazy pages, on-demand jsPDF / Excel / Razorpay scripts, Cloudinary resizing, text-indexed search plus a partial-word scan, cached categories, immutable asset caching', 'Render free plan; the partial-word scan reads every product (fine for hundreds)'],
   ['Scalability', 'Stateless API (can add instances), indexed queries, paged admin lists', 'In-memory rate-limit counts are per instance; the admin user list loads every account'],
   ['Usability', 'Dark mode, skeleton loaders, clear error text, WCAG-AA colour tuning, mobile layouts, self-service cancel and account deletion', 'Returns are requested through a ticket'],
@@ -185,8 +187,8 @@ ${table(['Rule', 'Detail'], [
 <h2>4.6 Orders, bills and reviews</h2>
 <ul>
 <li><b>My orders</b> lists each order with items, subtotal, shipping (or “Free”), discount with coupon code, total paid, delivery details and e-bill status.</li>
-<li><b>Download bill (PDF)</b> builds an A4 receipt in the browser: header, order and payment IDs, address, item table and totals (<code>ANM-Shop-Bill-&lt;id&gt;.pdf</code>); for a cancelled or returned order it adds a “Refunded” (or “Refund in progress”) line with the amount.</li>
-<li><b>Resend e-bill</b> emails the receipt again (paid orders that were not cancelled or returned, 5 per hour).</li>
+<li><b>Download bill (PDF)</b> builds an A4 receipt in the browser: header, order and payment IDs, address, item table and totals (<code>ANM-Shop-Bill-&lt;id&gt;.pdf</code>); for a cancelled or returned order it adds a “Refunded” (or “Refund in progress”) line with the amount. Once the business details are filled in, a “Sold by” block names the seller (legal name, address, GSTIN, phone). The totals, any refund line and the closing line always stay together above the bottom margin.</li>
+<li><b>Resend e-bill</b> emails the receipt again (paid orders that were not cancelled or returned, 5 per hour). The e-bill shows the order time in India time, and the seller once the business details are filled in.</li>
 <li><b>Cancel order:</b> shown while an order is pending. The full amount, shipping included, is refunded to the original payment method; stock goes back and the coupon use is returned. The order then shows its refund (“issued” or “in progress”). Shipped orders are returned through a support ticket; the admin marks the return and the refund follows.</li>
 <li><b>Reviews:</b> one per customer per product, rated Bad, Good or Excellent with a 10–1000 character comment. Submitting again edits it. A “Verified buyer” label appears if the customer ordered the product (and goes once every order of it is cancelled). Public names look like “Priya S.”.</li>
 </ul>
@@ -261,7 +263,7 @@ ${table(['Module', 'Responsibility'], [
   ['<code>utils/categories.js</code>', 'Cached category list, default categories on first start'],
   ['<code>utils/orderRefunds.js</code> · <code>razorpayClient.js</code>', 'Cancel / return transaction, Razorpay refund, admin alert, retry (checking Razorpay first), customer email · shared Razorpay client'],
   ['<code>utils/supportAssistant.js</code>', 'Gemini calls, retries, fallback model, 7 tools, system prompt'],
-  ['<code>utils/sendEmail.js</code> · <code>sendOrderInvoice.js</code>', 'Resend or Gmail delivery; HTML + text e-bill'],
+  ['<code>utils/sendEmail.js</code> · <code>sendOrderInvoice.js</code>', 'Resend or Gmail delivery; HTML + text e-bill (India time; the seller from <code>config/business.js</code>)'],
   ['<code>utils/tickets.js</code> · <code>orderLookup.js</code> · <code>reviews.js</code>', 'Shared ticket creation, #short codes, rating recount and legacy review migration'],
   ['<code>utils/orderMigrations.js</code>', 'One-time order breakdown fix, recorded in <code>migrations</code>'],
 ])}
@@ -274,7 +276,8 @@ ${fig(D.frontend, 'Figure 6.2 — Component tree and shared helpers')}
 <li><b>usePageMeta</b> sets the title, description, canonical URL, Open Graph and Twitter tags per page, and <code>noindex</code> on private pages.</li>
 <li><b>useCategories</b> is a small shared store (<code>useSyncExternalStore</code>): the categories load once for every page; the admin Categories tab, or an old category link, refreshes them, and only the newest answer is used.</li>
 <li><b>Page loading:</b> the footer sits inside the same <code>Suspense</code> boundary as the pages and loading placeholders fill the screen, so the footer no longer jumps down while a page arrives.</li>
-<li><b>Tests:</b> <code>npm test</code> in <code>frontend/</code> renders the admin Orders, Tickets and Search tabs in jsdom against a fake API that follows the server's rules.</li>
+<li><b>Tests:</b> <code>npm test</code> in <code>frontend/</code> renders the admin Orders, Tickets and Search tabs in jsdom against a fake API that follows the server's rules, the Contact, Terms and Privacy pages and the footer with sample business details, and the PDF bill with jsPDF faked.</li>
+<li><b>Business details:</b> <code>src/data/contactInfo.js</code> holds the legal name, address, phone and GSTIN, and the grievance officer. They ship empty. The business appears once its legal name and address are filled in: on the Contact page, footer (name and phone), Terms, Privacy policy and PDF bill. The grievance officer appears once their name, designation and email are filled in: on the Contact page, Terms and Privacy policy.</li>
 </ul>
 `);
 

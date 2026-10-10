@@ -26,7 +26,7 @@ const cover = `<section class="cover">
   <h1>ANM-Shop — online beauty store</h1>
   <p class="sub">Architecture (HLD), low-level design (LLD), user and API workflows, API and data reference, security, operations and roadmap.</p>
   <div class="meta">
-    <div><b>Edition</b>3 · up to pull request #28</div>
+    <div><b>Edition</b>4 · up to pull request #34</div>
     <div><b>Date</b>10 October 2026</div>
     <div><b>Stack</b>React 19 · Express 5 · MongoDB</div>
     <div><b>Live</b>anm-shop.vercel.app</div>
@@ -46,7 +46,7 @@ const toc = [
   ['limits', '10', 'Rate limits', '11 limiters'],
   ['frontend', '11', 'Frontend reference', 'Routes · SEO · Performance · Consent · Look and feel'],
   ['ops', '12', 'Configuration and operations', 'Environment variables · Local setup · Scripts · Start-up · Checklist'],
-  ['history', '13', 'Project history', 'Pull requests #1–#28'],
+  ['history', '13', 'Project history', 'Pull requests #1–#34'],
   ['limitations', '14', 'Known limitations and next steps', 'What to improve next'],
 ];
 const tocHtml = `<section class="chapter" style="break-before:auto"><div class="part-label">Contents</div><h1 class="part">Table of contents</h1>
@@ -67,7 +67,7 @@ ${inside(c1.ch6, c1.ch6b)}
 ${c2.ch7}
 ${c2.ch8}
 ${c2.ch9}
-${flowOn(c2.ch10)}
+${c2.ch10}
 ${c2.ch11}
 ${c2.ch12}
 ${c2.ch13}
