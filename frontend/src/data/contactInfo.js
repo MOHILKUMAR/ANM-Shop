@@ -6,7 +6,8 @@ export const linkedinProfile = "https://www.linkedin.com/in/mohil-kumar-dev";
 // appear on the Contact page, in the footer, in the Terms, in the Privacy policy and on the PDF
 // bill. Put the same values in backend/config/business.js for the e-bill email (a test fails
 // while the two differ). Leave a field "" until you have the real value, and when you fill them
-// in, update "Last updated" on the Terms and Privacy pages.
+// in, update "Last updated" on the Terms and Privacy pages. Use Latin letters only: the PDF
+// bill's font can't draw ₹, № or Hindi, and garbles the whole line (a test checks).
 export const business = {
   legalName: "", // the registered business name, or the proprietor's name
   address: "", // registered address on one line: street, city, state, PIN

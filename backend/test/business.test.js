@@ -25,7 +25,14 @@ const eBillFor = async () => {
 
 test("the API's business details match the site's (frontend/src/data/contactInfo.js)", async () => {
     const site = await import(pathToFileURL(path.join(__dirname, '../../frontend/src/data/contactInfo.js')).href);
-    assert.deepEqual(shipped, { ...site.business }, 'fill in backend/config/business.js with the same values as the site');
+    assert.deepEqual(shipped, { ...site.business }, 'backend/config/business.js and frontend/src/data/contactInfo.js must hold the same business details');
+});
+
+// The PDF bill's font (helvetica) draws Latin-1 and common punctuation; anything else garbles the line.
+test('the business details use only characters the PDF bill can print', () => {
+    for (const [field, value] of Object.entries(shipped)) {
+        assert.match(value, /^[\x20-\x7E\xA0-\xFF–—‘’“”]*$/, `${field} has a character the PDF bill can't print (e.g. ₹, № or Hindi): ${value}`);
+    }
 });
 
 test('the e-bill names no seller while the details are empty', async () => {

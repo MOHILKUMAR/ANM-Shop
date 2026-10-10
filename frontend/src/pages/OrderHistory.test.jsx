@@ -14,7 +14,8 @@ vi.mock("jspdf", () => ({
   jsPDF: class {
     constructor() {
       this.pages = [[]];
-      this.internal = { pageSize: { getWidth: () => 210, getHeight: () => 297 } };
+      this.internal = { pageSize: { getWidth: () => 210, getHeight: () => 297 }, scaleFactor: 72 / 25.4 };
+      this.fontSize = 16;
       pdfs.push(this);
     }
     text(text, x, y) { this.pages.at(-1).push({ text: [].concat(text).join("\n"), y }); }
@@ -26,7 +27,8 @@ vi.mock("jspdf", () => ({
     roundedRect() {}
     setTextColor() {}
     setFont() {}
-    setFontSize() {}
+    setFontSize(size) { this.fontSize = size; }
+    getLineHeight() { return this.fontSize * 1.15; } // in points, like jsPDF's default line height
     setDrawColor() {}
     line() {}
   },
@@ -43,19 +45,23 @@ afterEach(() => {
   Object.assign(business, original);
 });
 
-// A cancelled order with `count` items, a coupon discount and a refund: the longest ending a bill has.
-const order = (count) => ({
-  _id: `64b0aa0000000000000000${String(count).padStart(2, "0")}`,
+// An order with `count` items and one of three endings: "full" (subtotal, shipping, a coupon
+// discount and a refund: the longest), "plain" (subtotal and shipping) or "old" (a total only,
+// as orders placed before shipping and coupons existed).
+let orderNumber = 0;
+const order = (count, ending = "full") => ({
+  _id: `64b0aa00000000000000${String((orderNumber += 1)).padStart(4, "0")}`,
   createdAt: "2026-10-10T10:00:00.000Z",
-  paymentId: `pay_${count}`,
-  status: "cancelled",
+  paymentId: `pay_${orderNumber}`,
+  status: ending === "full" ? "cancelled" : "delivered",
   items: Array.from({ length: count }, (_, index) => ({ productId: { _id: `p${index}`, name: `Product ${index + 1}` }, qty: 1, price: 100 })),
-  subtotalAmount: count * 100,
-  shippingFee: 49,
-  discountAmount: 10,
-  couponCode: "SAVE10",
+  ...(ending !== "old" && { subtotalAmount: count * 100, shippingFee: 49 }),
+  ...(ending === "full" && {
+    discountAmount: 10,
+    couponCode: "SAVE10",
+    refund: { status: "refunded", amount: count * 100 + 39, completedAt: "2026-10-11T10:00:00.000Z" },
+  }),
   totalAmount: count * 100 + 39,
-  refund: { status: "refunded", amount: count * 100 + 39, completedAt: "2026-10-11T10:00:00.000Z" },
   address: { fullName: "Priya Sharma", street: "12 MG Road", city: "Delhi", postalCode: "110001", country: "India", phone: "+91 98765 43210" },
 });
 
@@ -94,21 +100,21 @@ test("once filled in, the PDF bill names the seller above the delivery address",
   const seller = find(pdf, "Example Beauty Traders");
   expect(seller.text).toBe("Example Beauty Traders\n12 Sample Road, Delhi, Delhi 110001\nGSTIN: GSTIN-SAMPLE-0001    Phone: +91 90000 00000");
   expect(seller.y).toBeGreaterThan(soldBy.y);
-  // Three lines, 5 mm apart, then a gap before the next heading.
-  expect(find(pdf, "Delivery address").y).toBeGreaterThan(seller.y + 2 * 5 + 5);
+  // Three 9 pt lines (1.15 x 9 pt apart, as jsPDF draws them), then the usual 10 mm to the next heading.
+  const lineHeight = (9 * 1.15) / (72 / 25.4);
+  expect(find(pdf, "Delivery address").y).toBeCloseTo(seller.y + 2 * lineHeight + 10, 5);
 });
 
-test("the totals, refund and closing line of a long bill stay together above the bottom margin", async () => {
-  const counts = Array.from({ length: 30 }, (_, index) => index + 1);
-  const buttons = await showOrders(counts.map(order));
+test("the totals, any refund and the closing line of a long bill stay together above the bottom margin", async () => {
+  const bills = ["full", "plain", "old"].flatMap((ending) => Array.from({ length: 30 }, (_, index) => ({ count: index + 1, ending })));
+  const buttons = await showOrders(bills.map(({ count, ending }) => order(count, ending)));
   for (const [index, button] of buttons.entries()) {
     const pdf = await downloadBill(button);
+    const label = `${bills[index].count} items, ${bills[index].ending} ending`;
     const closing = find(pdf, "Thank you for shopping with ANM-Shop.");
-    const total = find(pdf, "TOTAL PAID");
-    const refund = find(pdf, "REFUNDED");
-    const label = `${counts[index]} items`;
+    const ending = [find(pdf, "TOTAL PAID"), find(pdf, "REFUNDED"), find(pdf, "Subtotal")].filter(Boolean);
+    expect(ending.length, label).toBe({ full: 3, plain: 2, old: 1 }[bills[index].ending]);
     expect(closing.y, label).toBeLessThanOrEqual(297 - 15);
-    expect(refund.y, label).toBeLessThanOrEqual(297 - 15);
-    expect([total.page, refund.page], label).toEqual([closing.page, closing.page]);
+    for (const line of ending) expect(line.page, label).toBe(closing.page);
   }
 });

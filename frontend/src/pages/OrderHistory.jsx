@@ -86,7 +86,7 @@ async function downloadBill(order) {
       [business.gstin && `GSTIN: ${business.gstin}`, business.phone && `Phone: ${business.phone}`].filter(Boolean).join("    "),
     ].filter(Boolean);
     pdf.text(sellerLines, margin, y);
-    y += sellerLines.length * 5 + 1;
+    y += (sellerLines.length - 1) * (pdf.getLineHeight() / pdf.internal.scaleFactor) + 6;
   }
 
   y += 4;
