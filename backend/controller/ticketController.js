@@ -77,7 +77,10 @@ const addTicketMessage = async (req, res) => {
     const isAdmin = req.user.role === 'admin';
     try {
         const filter = isAdmin ? { _id: req.params.id } : { _id: req.params.id, user: req.user._id };
-        const ticket = await Ticket.findOne(filter).populate('user', 'name email');
+        const query = Ticket.findOne(filter).populate('user', 'name email');
+        // Admins get the order's details, like the list, so the open thread keeps its order summary.
+        if (isAdmin) query.populate('order', 'totalAmount status paymentId createdAt');
+        const ticket = await query;
         if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
         if (ticket.status === 'closed' && !isAdmin) {
             return res.status(409).json({ message: 'This ticket is closed. Open a new ticket if you still need help.' });

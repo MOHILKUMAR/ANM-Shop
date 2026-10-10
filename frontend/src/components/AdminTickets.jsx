@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
 import { TicketSummary, TicketThread } from "./TicketThread.jsx";
@@ -12,60 +12,88 @@ function AdminTickets({ token }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [openId, setOpenId] = useState(null);
-  const [error, setError] = useState("");
+  // The open thread as it is now, for replies and reloads that finish later.
+  const openRef = useRef(null);
+  // Kept apart, so a reload that works doesn't hide a status change that failed.
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  // Each reload gets a new number (from a counter, so a late reply can't reuse an old one).
+  const [reloadKey, setReloadKey] = useState(0);
+  const reloads = useRef(0);
+  // The ticket whose thread is open when it changes: a reply (or status change) puts it at the
+  // top of the list, so the reload that follows the change goes to page 1 with it.
+  const following = useRef(null);
 
   useEffect(() => {
     let active = true;
     apiRequest(`/tickets?${ticketQuery(page, filter)}`, { token })
       .then((result) => {
         if (!active) return;
-        // A status change can empty the last page; go to the page that is now last.
+        // Only the reload for that change, on the page where it was made, follows it.
+        const note = following.current;
+        const followed = note?.reloadKey === reloadKey && note.filter === filter && note.page === page && note.id === openRef.current ? note : null;
+        if (followed) following.current = null;
+        setLoadError("");
         const lastPage = Math.max(result.pagination?.pages || 1, 1);
+        // A change can empty the last page: show the page that is now last.
         if (page > lastPage) {
+          setData(null);
           setPage(lastPage);
+          return;
+        }
+        // The ticket being worked on moved to the top of the list (page 1): go there, thread still open.
+        if (followed && page > 1 && !result.tickets.some((ticket) => ticket._id === followed.id)) {
+          setData(null);
+          setPage(1);
           return;
         }
         setData(result);
       })
       .catch((requestError) => {
-        if (active) setError(requestError.message);
+        if (active) setLoadError(requestError.message);
       });
     return () => {
       active = false;
     };
-  }, [token, filter, page]);
+  }, [token, filter, page, reloadKey]);
+
+  useEffect(() => {
+    openRef.current = openId;
+  }, [openId]);
 
   function chooseFilter(next) {
+    following.current = null;
     setData(null);
-    setError("");
+    setLoadError("");
+    setActionError("");
     setFilter(next);
     setPage(1);
+    setReloadKey((reloads.current += 1)); // reloads even when this filter and page are already shown
   }
 
   function goToPage(next) {
+    following.current = null;
     setData(null);
     setPage(next);
   }
 
-  // Replace one ticket in place, or drop it when it no longer matches the status filter. Only the
-  // counts are reloaded: reloading the page would move a ticket just answered to page 1, out of view.
+  // Shows the change at once, then reloads the page: tickets that no longer match the filter
+  // leave and the next ones move up, and the counts update.
   function applyUpdate(updated) {
-    setData((current) => ({
+    const stillListed = !filter || updated.status === filter;
+    setData((current) => current && {
       ...current,
       tickets: current.tickets
         .map((ticket) => (ticket._id === updated._id ? updated : ticket))
-        .filter((ticket) => !filter || ticket.status === filter),
-    }));
-    apiRequest(`/tickets?${ticketQuery(page, filter)}`, { token })
-      .then((result) => {
-        // The change emptied the last page: go to the page that is now last.
-        if (page > Math.max(result.pagination?.pages || 1, 1)) {
-          goToPage(Math.max(result.pagination?.pages || 1, 1));
-          return;
-        }
-        setData((current) => current && { ...current, counts: result.counts, pagination: result.pagination });
-      })
-      .catch(() => {});
+        .filter((ticket) => ticket._id !== updated._id || stillListed),
+    });
+    const next = (reloads.current += 1);
+    const note = following.current;
+    if (stillListed && updated._id === openRef.current) following.current = { id: updated._id, filter, page, reloadKey: next };
+    // This reload replaces one still following an earlier change to another ticket.
+    else if (note && note.id !== updated._id) following.current = { ...note, reloadKey: next };
+    else following.current = null;
+    setReloadKey(next);
   }
 
   async function reply(ticketId, body) {
@@ -79,7 +107,7 @@ function AdminTickets({ token }) {
   }
 
   async function changeStatus(ticketId, status) {
-    setError("");
+    setActionError("");
     try {
       applyUpdate(await apiRequest(`/tickets/${ticketId}/status`, {
         method: "PUT",
@@ -88,7 +116,7 @@ function AdminTickets({ token }) {
         body: JSON.stringify({ status }),
       }));
     } catch (requestError) {
-      setError(requestError.message);
+      setActionError(requestError.message);
     }
   }
 
@@ -116,8 +144,9 @@ function AdminTickets({ token }) {
         ))}
       </div>
 
-      {error && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
-      {!data && !error && <ListSkeleton rows={4} label="Loading tickets" />}
+      {actionError && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{actionError}</p>}
+      {loadError && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{loadError}</p>}
+      {!data && !loadError && <ListSkeleton rows={4} label="Loading tickets" />}
       {data && data.tickets.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No tickets here.</p>}
       {data?.tickets.map((ticket) => (
         <article className="rounded-xl border border-gray-200 bg-white p-5" key={ticket._id}>
