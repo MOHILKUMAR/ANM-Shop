@@ -11,10 +11,11 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch or pull request cancels the run still going.
+# A newer push to a pull request cancels its run still going. Runs on main always finish, so
+# every merge gets its own result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   api:
@@ -33,12 +34,12 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       # The first test run downloads a MongoDB binary for the in-memory database; keep it
-      # between runs.
+      # between runs. The key follows the library that picks the MongoDB version, so an
+      # upgrade starts a fresh cache instead of piling binaries up.
       - uses: actions/cache@v6
         with:
           path: ~/.cache/mongodb-binaries
-          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
-          restore-keys: mongodb-binaries-${{ runner.os }}-
+          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('backend/node_modules/mongodb-memory-server-core/package.json') }}
       - run: MONGOMS_DOWNLOAD_DIR="$HOME/.cache/mongodb-binaries" npm test
 
   shop:
