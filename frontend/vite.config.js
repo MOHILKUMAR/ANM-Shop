@@ -15,4 +15,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss(),],
   server: { proxy: apiProxy },
   preview: { proxy: apiProxy },
+  // `npm test`: component tests in a simulated browser (src/**/*.test.jsx)
+  test: { environment: 'jsdom' },
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
 import { TicketSummary, TicketThread } from "./TicketThread.jsx";
@@ -13,16 +13,28 @@ function AdminTickets({ token }) {
   const [data, setData] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  // A ticket just answered, which the list follows if the reply moved it to another page.
+  const following = useRef(null);
 
   useEffect(() => {
     let active = true;
     apiRequest(`/tickets?${ticketQuery(page, filter)}`, { token })
       .then((result) => {
         if (!active) return;
-        // A status change can empty the last page; go to the page that is now last.
+        const followed = following.current;
+        following.current = null;
         const lastPage = Math.max(result.pagination?.pages || 1, 1);
+        // A change can empty the last page: show the page that is now last.
         if (page > lastPage) {
+          setData(null);
           setPage(lastPage);
+          return;
+        }
+        // A reply puts its ticket at the top of the list (page 1): go there, thread still open.
+        if (followed?.filter === filter && page > 1 && !result.tickets.some((ticket) => ticket._id === followed.id)) {
+          setData(null);
+          setPage(1);
           return;
         }
         setData(result);
@@ -33,9 +45,10 @@ function AdminTickets({ token }) {
     return () => {
       active = false;
     };
-  }, [token, filter, page]);
+  }, [token, filter, page, reloadKey]);
 
   function chooseFilter(next) {
+    following.current = null;
     setData(null);
     setError("");
     setFilter(next);
@@ -43,29 +56,23 @@ function AdminTickets({ token }) {
   }
 
   function goToPage(next) {
+    following.current = null;
     setData(null);
     setPage(next);
   }
 
-  // Replace one ticket in place, or drop it when it no longer matches the status filter. Only the
-  // counts are reloaded: reloading the page would move a ticket just answered to page 1, out of view.
+  // Shows the change at once, then reloads the page: tickets that no longer match the filter
+  // leave and the next ones move up, and the counts update.
   function applyUpdate(updated) {
-    setData((current) => ({
+    const stillListed = !filter || updated.status === filter;
+    setData((current) => current && {
       ...current,
       tickets: current.tickets
         .map((ticket) => (ticket._id === updated._id ? updated : ticket))
-        .filter((ticket) => !filter || ticket.status === filter),
-    }));
-    apiRequest(`/tickets?${ticketQuery(page, filter)}`, { token })
-      .then((result) => {
-        // The change emptied the last page: go to the page that is now last.
-        if (page > Math.max(result.pagination?.pages || 1, 1)) {
-          goToPage(Math.max(result.pagination?.pages || 1, 1));
-          return;
-        }
-        setData((current) => current && { ...current, counts: result.counts, pagination: result.pagination });
-      })
-      .catch(() => {});
+        .filter((ticket) => ticket._id !== updated._id || stillListed),
+    });
+    following.current = stillListed ? { id: updated._id, filter } : null;
+    setReloadKey((key) => key + 1);
   }
 
   async function reply(ticketId, body) {

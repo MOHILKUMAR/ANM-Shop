@@ -66,6 +66,7 @@ the Users tab.
 | backend | `npm test` | API tests against an in-memory MongoDB with a fake Razorpay (never reads `.env`) |
 | backend | `npm start` / `npm run dev` | Run the API (dev restarts on changes) |
 | backend | `npm run seed` · `npm run promote-admin` | Demo catalogue · make the first admin |
+| frontend | `npm test` | Component tests (Vitest) in a simulated browser, with the API faked |
 | frontend | `npm run build` · `npm run lint` | Production build (checks the CSP hash first) · ESLint |
 | frontend | `npm run csp-hash` | Prints the hash of `index.html`'s inline script for `vercel.json` |
 

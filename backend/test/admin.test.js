@@ -58,3 +58,23 @@ test('admins can page through more than 200 tickets', async () => {
     assert.equal(last.body.tickets.length, 30);
     assert.equal(last.body.tickets.at(-1).subject, 'Question 229', 'oldest activity last');
 });
+
+test('an admin reply returns the ticket with its order details; a customer reply does not', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const customer = await createUser();
+    const product = await createProduct();
+    const order = await Order.create({ user: customer.user._id, items: [{ productId: product._id, qty: 1, price: 200 }], totalAmount: 249, address, paymentId: 'pay_ticket1' });
+    const ticket = await Ticket.create({ user: customer.user._id, subject: 'Late parcel', category: 'delivery', description: 'It has not arrived yet.', order: order._id });
+
+    const adminReply = await api().post(`/api/tickets/${ticket._id}/messages`).set(admin.auth).send({ body: 'It ships today.' });
+    assert.equal(adminReply.status, 201);
+    assert.equal(adminReply.body.status, 'in_progress');
+    assert.equal(adminReply.body.order.totalAmount, 249, 'the admin thread keeps its order summary');
+    assert.equal(adminReply.body.order.paymentId, 'pay_ticket1');
+
+    const customerReply = await api().post(`/api/tickets/${ticket._id}/messages`).set(customer.auth).send({ body: 'Thank you!' });
+    assert.equal(customerReply.status, 201);
+    assert.equal(customerReply.body.order.code, adminReply.body.order.code);
+    assert.equal(customerReply.body.order.totalAmount, undefined, 'customers get the order code only');
+    assert.equal((await Ticket.findById(ticket._id)).order.toString(), order._id.toString(), 'saving keeps the order reference');
+});
