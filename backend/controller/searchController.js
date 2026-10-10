@@ -59,7 +59,8 @@ const customerHistory = async (userId) => {
             .lean(),
         Order.aggregate([
             { $match: { user: userId } },
-            { $group: { _id: null, orderCount: { $sum: 1 }, totalSpent: { $sum: '$totalAmount' } } },
+            // Cancelled and returned orders were refunded (as on the Users tab).
+            { $group: { _id: null, orderCount: { $sum: 1 }, totalSpent: { $sum: { $cond: [{ $in: ['$status', ['cancelled', 'returned']] }, 0, '$totalAmount'] } } } },
         ]),
     ]);
     return {

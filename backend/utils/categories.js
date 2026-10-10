@@ -16,12 +16,15 @@ const DEFAULT_CATEGORIES = [
 // changes clear the cache at once; the time limit covers other API instances.
 const CACHE_MS = 60 * 1000;
 let cache = null;
+// Counts cache clears, so a lookup that started before a change can't put the old list back.
+let generation = 0;
 
 // All categories in display order.
 const listCategories = async () => {
     if (cache && Date.now() - cache.at < CACHE_MS) return cache.list;
+    const started = generation;
     const list = await Category.find().sort({ sortOrder: 1, name: 1 }).select('name description icon sortOrder').lean();
-    cache = { at: Date.now(), list };
+    if (started === generation) cache = { at: Date.now(), list };
     return list;
 };
 
@@ -30,6 +33,7 @@ const categoryNames = async () => (await listCategories()).map((category) => cat
 
 const clearCategoryCache = () => {
     cache = null;
+    generation += 1;
 };
 
 // Adds the launch categories to an empty collection; safe to run on every start.

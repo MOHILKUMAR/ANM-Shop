@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const Product = require('./model/Product');
 const beautyProducts = require('./data/beautyProducts');
-const { ensureDefaultCategories } = require('./utils/categories');
+const { ensureDefaultCategories, categoryNames } = require('./utils/categories');
 
 dotenv.config();
 
@@ -27,14 +27,23 @@ const seedBeautyCatalog = async () => {
             // The demo products use the default categories.
             await ensureDefaultCategories();
             await Product.deleteMany({ name: { $in: legacyDemoProductNames } });
+            // Only missing demo products are added; ones already there keep any changes admins
+            // made (price, stock, photos, category).
+            let added = 0;
             for (const product of beautyProducts) {
-                await Product.updateOne(
+                const result = await Product.updateOne(
                     { name: product.name },
-                    { $set: product },
+                    { $setOnInsert: product },
                     { upsert: true, runValidators: true },
                 );
+                added += result.upsertedCount;
             }
-            console.log(`Beauty catalog ready with ${beautyProducts.length} products.`);
+            console.log(`Beauty catalog ready: ${added} demo products added, ${beautyProducts.length - added} already there.`);
+            const shopCategories = await categoryNames();
+            const missing = [...new Set(beautyProducts.map((product) => product.category))].filter((name) => !shopCategories.includes(name));
+            if (missing.length) {
+                console.warn(`These demo categories were renamed or removed, so new demo products in them stay hidden until you move them: ${missing.join(', ')}`);
+            }
         }
     } catch (error) {
         console.error('Beauty catalog seed failed:', error.message);

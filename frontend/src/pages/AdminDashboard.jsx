@@ -335,7 +335,7 @@ function AdminDashboard() {
       ) : tab === "reviews" ? (
         <AdminReviews token={user.token} />
       ) : tab === "categories" ? (
-        <AdminCategories token={user.token} />
+        <AdminCategories token={user.token} onChanged={() => setRefreshKey((key) => key + 1)} />
       ) : (
         <AdminOrders token={user.token} onChanged={() => setRefreshKey((key) => key + 1)} />
       )}

@@ -6,6 +6,9 @@ const User = require('../model/User');
 const Order = require('../model/Order');
 const ChatConversation = require('../model/ChatConversation');
 const Review = require('../model/Review');
+const Ticket = require('../model/Ticket');
+const Coupon = require('../model/Coupon');
+const PaymentIntent = require('../model/PaymentIntent');
 const { refreshProductRating } = require('../utils/reviews');
 const sendEmail = require('../utils/sendEmail');
 
@@ -343,13 +346,28 @@ const resetPassword = async (req, res) => {
 
 // Orders and payment records are kept (they show as "Deleted account"); the account's
 // sign-in tokens stop working because `protect` no longer finds the user.
-// Deletes an account with its chat history and reviews (recounting the affected products).
-// Orders, payments and tickets stay as business records, as the privacy policy says.
+// Deletes an account with its chat history and reviews (recounting the affected products), all
+// or nothing. Orders, payments and tickets stay as business records, as the privacy policy says;
+// open tickets are closed, since replies could no longer reach anyone. A coupon meant only for
+// this customer is switched off: with no customers left on it, it would be open to everyone.
 const removeAccount = async (user) => {
-    await user.deleteOne();
-    await ChatConversation.deleteOne({ user: user._id });
-    const reviewedProducts = await Review.distinct('product', { user: user._id });
-    await Review.deleteMany({ user: user._id });
+    let reviewedProducts = [];
+    const session = await mongoose.startSession();
+    try {
+        await session.withTransaction(async () => {
+            reviewedProducts = await Review.distinct('product', { user: user._id }).session(session);
+            await Review.deleteMany({ user: user._id }, { session });
+            await ChatConversation.deleteOne({ user: user._id }, { session });
+            await Ticket.updateMany({ user: user._id, status: { $in: ['open', 'in_progress'] } }, { $set: { status: 'closed' } }, { session });
+            const coupons = await Coupon.find({ applicableUsers: user._id }).select('applicableUsers').session(session).lean();
+            const onlyTheirs = coupons.filter((coupon) => coupon.applicableUsers.length === 1).map((coupon) => coupon._id);
+            await Coupon.updateMany({ _id: { $in: onlyTheirs } }, { $set: { isActive: false, showToCustomers: false } }, { session });
+            await Coupon.updateMany({ applicableUsers: user._id }, { $pull: { applicableUsers: user._id } }, { session });
+            await User.deleteOne({ _id: user._id }, { session });
+        });
+    } finally {
+        await session.endSession();
+    }
     await Promise.all(reviewedProducts.map((productId) => refreshProductRating(productId)));
 };
 
@@ -425,10 +443,22 @@ const deleteMyAccount = async (req, res) => {
         if (user.role === 'admin') {
             return res.status(409).json({ message: 'Admin accounts can’t be deleted. Ask another admin to change your role to customer first.' });
         }
-        const activeOrders = await Order.countDocuments({ user: user._id, status: { $in: ['pending', 'shipped'] } });
+        const [activeOrders, refundOwed, paymentInProgress] = await Promise.all([
+            Order.countDocuments({ user: user._id, status: { $in: ['pending', 'shipped'] } }),
+            Order.exists({ user: user._id, 'refund.status': { $in: ['pending', 'failed'] } }),
+            // Paid, but the order hasn't been created yet (Razorpay is still confirming it), or a
+            // checkout that couldn't become an order is being refunded.
+            PaymentIntent.exists({ user: user._id, $or: [{ status: 'pending', paymentId: { $type: 'string' } }, { status: 'refund_pending' }] }),
+        ]);
         if (activeOrders) {
             const them = activeOrders === 1 ? 'it' : 'them';
             return res.status(409).json({ message: `You have ${activeOrders} order${activeOrders === 1 ? '' : 's'} on the way. Cancel ${them} on My orders or wait for delivery, then delete your account.` });
+        }
+        if (refundOwed) {
+            return res.status(409).json({ message: 'A refund to you is still being processed. You can delete your account once it has been issued (see My orders).' });
+        }
+        if (paymentInProgress) {
+            return res.status(409).json({ message: 'A payment of yours is still being confirmed. Try again in a few minutes, once its order appears on My orders.' });
         }
         await removeAccount(user);
         const text = `Hi ${user.name},\n\nYour ANM-Shop account (${user.email}) has been deleted, with your reviews and chat history. Records of past orders and payments are kept as the law requires.\n\nIf you didn't do this, contact us by replying to this email.`;
@@ -466,8 +496,10 @@ const setUserRole = async (req, res) => {
             await user.save();
             return res.status(409).json({ message: 'The shop needs at least one admin' });
         }
+        // The API applies the new role at once; the person's open browser shows it after they
+        // sign in again (the signed-in page keeps the role it was given at sign-in).
         return res.json({
-            message: role === 'admin' ? `${user.name} is now an admin` : `${user.name} is now a customer`,
+            message: `${user.name} is now ${role === 'admin' ? 'an admin' : 'a customer'}. If they're signed in, they'll see the change after signing out and back in.`,
             user: summary(),
         });
     } catch (error) {

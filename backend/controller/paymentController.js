@@ -218,6 +218,11 @@ const fulfillPayment = async (intentId, paymentId, paymentMethod) => {
             created = false;
             const intent = await PaymentIntent.findOne({ _id: intentId, status: 'pending' }).session(session);
             if (!intent) return; // already handled by another request
+            // Deleted after paying (e.g. before the webhook arrived): no one could see or cancel
+            // the order, so the payment is refunded instead.
+            if (!(await User.exists({ _id: intent.user }).session(session))) {
+                throw new FulfillmentRefusal('The account that paid for this order has been deleted.');
+            }
 
             await redeemCoupon(intent, paymentMethod, session);
 
@@ -338,6 +343,8 @@ const verifyPayment = async (req, res) => {
 
         if (payment.status === 'authorized') {
             // The payment.captured webhook creates the order once Razorpay finishes capturing.
+            // Noting the payment marks the checkout as paid (e.g. account deletion waits for it).
+            await PaymentIntent.updateOne({ _id: intent._id, status: 'pending' }, { $set: { paymentId } });
             return res.status(202).json({
                 pending: true,
                 message: `Your payment (${paymentId}) was received and is still being confirmed. Your order will appear in Order History within a few minutes — please don't pay again.`,

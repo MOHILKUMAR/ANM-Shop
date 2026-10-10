@@ -8,8 +8,9 @@ const emptyForm = { name: "", description: "", icon: "✦", sortOrder: "" };
 const countLabel = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 // Categories shown on the home page, the shop filter and the product form. Renaming one also
-// renames it on its products and coupons; one in use can't be deleted.
-function AdminCategories({ token }) {
+// renames it on its products and coupons; one in use can't be deleted. `onChanged` lets the
+// dashboard reload its product list, which shows each product's category.
+function AdminCategories({ token, onChanged }) {
   const [categories, setCategories] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [form, setForm] = useState(emptyForm);
@@ -34,11 +35,12 @@ function AdminCategories({ token }) {
     };
   }, [token, reloadKey]);
 
-  // The admin list and every page's shared list both need the change.
+  // The admin list, every page's shared list and the dashboard's products all need the change.
   function changed(message) {
     setNotice(message);
     setReloadKey((key) => key + 1);
     refreshCategories();
+    onChanged?.();
   }
 
   function startEdit(category) {
