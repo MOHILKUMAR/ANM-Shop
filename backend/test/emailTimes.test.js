@@ -4,7 +4,9 @@ process.env.TZ = 'UTC';
 
 const { before, after, beforeEach, test } = require('node:test');
 const assert = require('node:assert/strict');
+const { Types } = require('mongoose');
 const { startDb, stopDb, resetDb, api, createUser, createProduct, placeOrder, sentEmails } = require('./helpers');
+const Order = require('../model/Order');
 const User = require('../model/User');
 
 before(startDb);
@@ -17,24 +19,21 @@ const eventually = async (find) => {
     return find();
 };
 
-// India time (UTC+5:30, no daylight saving), worked out by hand: e.g. "16 Jan 2026, 1:30 am".
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const indiaTime = (date) => {
-    const ist = new Date(new Date(date).getTime() + 330 * 60 * 1000);
-    const hours = ist.getUTCHours();
-    return `${ist.getUTCDate()} ${MONTHS[ist.getUTCMonth()]} ${ist.getUTCFullYear()}, ${hours % 12 || 12}:${String(ist.getUTCMinutes()).padStart(2, '0')} ${hours < 12 ? 'am' : 'pm'}`;
-};
-
 test('the e-bill shows the order time in India time', async () => {
     const customer = await createUser();
     const product = await createProduct();
     const order = await placeOrder(customer, [{ productId: String(product._id), qty: 1 }]);
+    // 8 pm UTC on 15 January is 1:30 am on the 16th in India. (Straight to the collection:
+    // Mongoose doesn't let an update change createdAt.)
+    await Order.collection.updateOne({ _id: new Types.ObjectId(String(order._id)) }, { $set: { createdAt: new Date('2026-01-15T20:00:00Z') } });
 
-    const bill = await eventually(() => sentEmails.find((email) => email.subject.includes('e-bill')));
+    sentEmails.length = 0;
+    const resent = await api().post(`/api/orders/${order._id}/resend-invoice`).set(customer.auth);
+    assert.equal(resent.status, 200);
+    const bill = sentEmails.find((email) => email.subject.includes('e-bill'));
     assert.ok(bill, 'the e-bill was sent');
-    const expected = indiaTime(order.createdAt);
-    assert.ok(bill.text.includes(`Date: ${expected}`), `text should say "Date: ${expected}":\n${bill.text}`);
-    assert.ok(bill.html.includes(`>${expected}<`), `the HTML should show ${expected}`);
+    assert.ok(bill.text.includes('Date: 16 Jan 2026, 1:30 am'), bill.text);
+    assert.ok(bill.html.includes('>16 Jan 2026, 1:30 am<'), 'the HTML shows the same date');
 });
 
 test('the password-changed email shows the time in India time', async () => {
@@ -45,7 +44,11 @@ test('the password-changed email shows the time in India time', async () => {
 
     const notice = await eventually(() => sentEmails.find((email) => email.subject.includes('password was changed')));
     assert.ok(notice, 'the notice was sent');
+    // India is UTC+5:30 all year. The month is left to the locale (it writes September "Sept").
     const { passwordChangedAt } = await User.findById(customer.user._id);
-    const expected = indiaTime(passwordChangedAt);
-    assert.ok(notice.text.includes(`was changed on ${expected} (India time).`), `text should give ${expected}:\n${notice.text}`);
+    const ist = new Date(passwordChangedAt.getTime() + 330 * 60 * 1000);
+    const hours = ist.getUTCHours();
+    const clock = `${hours % 12 || 12}:${String(ist.getUTCMinutes()).padStart(2, '0')} ${hours < 12 ? 'am' : 'pm'}`;
+    const expected = new RegExp(`was changed on ${ist.getUTCDate()} [A-Z][a-z]+ ${ist.getUTCFullYear()}, ${clock} \\(India time\\)\\.`);
+    assert.match(notice.text, expected);
 });
