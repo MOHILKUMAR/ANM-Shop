@@ -12,7 +12,11 @@ function AdminTickets({ token }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [openId, setOpenId] = useState(null);
-  const [error, setError] = useState("");
+  // The open thread as it is now, for replies and reloads that finish later.
+  const openRef = useRef(null);
+  // Kept apart, so a reload that works doesn't hide a status change that failed.
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
   // Each reload gets a new number (from a counter, so a late reply can't reuse an old one).
   const [reloadKey, setReloadKey] = useState(0);
   const reloads = useRef(0);
@@ -27,9 +31,9 @@ function AdminTickets({ token }) {
         if (!active) return;
         // Only the reload for that change, on the page where it was made, follows it.
         const note = following.current;
-        const followed = note?.reloadKey === reloadKey && note.filter === filter && note.page === page ? note : null;
+        const followed = note?.reloadKey === reloadKey && note.filter === filter && note.page === page && note.id === openRef.current ? note : null;
         if (followed) following.current = null;
-        setError("");
+        setLoadError("");
         const lastPage = Math.max(result.pagination?.pages || 1, 1);
         // A change can empty the last page: show the page that is now last.
         if (page > lastPage) {
@@ -46,17 +50,22 @@ function AdminTickets({ token }) {
         setData(result);
       })
       .catch((requestError) => {
-        if (active) setError(requestError.message);
+        if (active) setLoadError(requestError.message);
       });
     return () => {
       active = false;
     };
   }, [token, filter, page, reloadKey]);
 
+  useEffect(() => {
+    openRef.current = openId;
+  }, [openId]);
+
   function chooseFilter(next) {
     following.current = null;
     setData(null);
-    setError("");
+    setLoadError("");
+    setActionError("");
     setFilter(next);
     setPage(1);
     setReloadKey((reloads.current += 1)); // reloads even when this filter and page are already shown
@@ -80,7 +89,7 @@ function AdminTickets({ token }) {
     });
     const next = (reloads.current += 1);
     const note = following.current;
-    if (stillListed && updated._id === openId) following.current = { id: updated._id, filter, page, reloadKey: next };
+    if (stillListed && updated._id === openRef.current) following.current = { id: updated._id, filter, page, reloadKey: next };
     // This reload replaces one still following an earlier change to another ticket.
     else if (note && note.id !== updated._id) following.current = { ...note, reloadKey: next };
     else following.current = null;
@@ -98,7 +107,7 @@ function AdminTickets({ token }) {
   }
 
   async function changeStatus(ticketId, status) {
-    setError("");
+    setActionError("");
     try {
       applyUpdate(await apiRequest(`/tickets/${ticketId}/status`, {
         method: "PUT",
@@ -107,7 +116,7 @@ function AdminTickets({ token }) {
         body: JSON.stringify({ status }),
       }));
     } catch (requestError) {
-      setError(requestError.message);
+      setActionError(requestError.message);
     }
   }
 
@@ -135,8 +144,9 @@ function AdminTickets({ token }) {
         ))}
       </div>
 
-      {error && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
-      {!data && !error && <ListSkeleton rows={4} label="Loading tickets" />}
+      {actionError && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{actionError}</p>}
+      {loadError && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{loadError}</p>}
+      {!data && !loadError && <ListSkeleton rows={4} label="Loading tickets" />}
       {data && data.tickets.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No tickets here.</p>}
       {data?.tickets.map((ticket) => (
         <article className="rounded-xl border border-gray-200 bg-white p-5" key={ticket._id}>

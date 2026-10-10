@@ -17,6 +17,8 @@ let clock;
 // When set, replies or list requests wait for these promises (to land them at awkward moments).
 let holdReplies;
 let holdLists;
+// A ticket whose status change the fake server refuses.
+let failStatusFor;
 
 function makeTickets(count, status = "open") {
   clock = Date.UTC(2026, 9, 10, 12);
@@ -59,6 +61,7 @@ async function fakeApi(path, { method = "GET", body } = {}) {
     ticket.messages.push({ author: "admin", authorName: "Asha", body: JSON.parse(body).body, createdAt: new Date(clock).toISOString() });
     if (ticket.status === "open") ticket.status = "in_progress";
   } else {
+    if (id === failStatusFor) throw Object.assign(new Error("Could not change the status"), { status: 500 });
     ticket.status = JSON.parse(body).status;
   }
   clock += 60_000;
@@ -69,6 +72,7 @@ async function fakeApi(path, { method = "GET", body } = {}) {
 beforeEach(() => {
   holdReplies = null;
   holdLists = null;
+  failStatusFor = null;
   apiRequest.mockImplementation(fakeApi);
 });
 
@@ -193,6 +197,43 @@ test("a status change on a closed thread keeps the admin on their page", async (
   fireEvent.change(within(ticketCard("Question 52")).getByRole("combobox", { name: "Ticket status" }), { target: { value: "resolved" } });
   await waitFor(() => expect(chip("Resolved").textContent).toBe("Resolved (1)"));
   expect(pager()).toBe("Page 2 of 2");
+});
+
+test("opening another ticket before a reply saves keeps the admin with that ticket", async () => {
+  makeTickets(55, "in_progress");
+  render(<AdminTickets token="test" />);
+  await waitFor(() => expect(screen.getByText(/No tickets here/)).toBeTruthy());
+  fireEvent.click(chip("All"));
+  await waitFor(() => expect(pager()).toBe("Page 1 of 2"));
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(pager()).toBe("Page 2 of 2"));
+
+  const [replyHeld, saveReply] = gate();
+  holdReplies = replyHeld;
+  await reply("Question 52", "Sorted, thanks for waiting.");
+  fireEvent.click(within(ticketCard("Question 54")).getByRole("button", { name: "Open" }));
+  const callsBefore = apiRequest.mock.calls.length;
+  saveReply();
+  await waitFor(() => expect(apiRequest.mock.calls.length).toBeGreaterThan(callsBefore)); // the reload after the reply
+  await new Promise((resolve) => { setTimeout(resolve, 100); });
+  expect(pager()).toBe("Page 2 of 2");
+  expect(within(ticketCard("Question 54")).getByRole("textbox")).toBeTruthy();
+});
+
+test("a failed status change stays on screen when another change's reload finishes", async () => {
+  makeTickets(5);
+  render(<AdminTickets token="test" />);
+  await waitFor(() => expect(statusSelects()).toHaveLength(5));
+
+  const [listsHeld, sendLists] = gate();
+  holdLists = listsHeld;
+  fireEvent.change(within(ticketCard("Question 1")).getByRole("combobox", { name: "Ticket status" }), { target: { value: "resolved" } });
+  failStatusFor = "t2";
+  fireEvent.change(within(ticketCard("Question 2")).getByRole("combobox", { name: "Ticket status" }), { target: { value: "resolved" } });
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Could not change the status"));
+  sendLists();
+  await waitFor(() => expect(chip("Resolved").textContent).toBe("Resolved (1)"));
+  expect(screen.getByRole("alert").textContent).toBe("Could not change the status");
 });
 
 test("clicking the filter that is already shown reloads it instead of leaving it empty", async () => {
