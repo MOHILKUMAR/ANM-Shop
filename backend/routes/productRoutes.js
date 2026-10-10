@@ -9,7 +9,7 @@ const multer = require('multer');
 const acceptedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const upload = multer({
 	storage: multer.memoryStorage(),
-	limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+	limits: { fileSize: 5 * 1024 * 1024, files: 6 },
 	fileFilter(req, file, callback) {
 		if (!acceptedImageTypes.has(file.mimetype)) {
 			return callback(new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'image'));
@@ -21,13 +21,13 @@ const upload = multer({
 
 const router = express.Router();
 //all products
-router.route('/').get(getProducts).post(protect, admin,upload.single('image')  ,createProduct);
+router.route('/').get(getProducts).post(protect, admin,upload.array('images', 6)  ,createProduct);
 router.get('/manage', protect, admin, getAdminProducts);
 router.get('/lookup', lookupLimiter, lookupProducts);
 router.route('/:id/reviews').get(listProductReviews).post(protect, reviewLimiter, saveProductReview);
 router.route('/:id/reviews/mine').get(protect, myProductReview).delete(protect, reviewLimiter, deleteMyReview);
 
 //specific products
-router.route('/:id').get(getProductById).put(protect , admin, upload.single('image'), updateProduct).delete(protect, admin ,deleteProduct);
+router.route('/:id').get(getProductById).put(protect , admin, upload.array('images', 6), updateProduct).delete(protect, admin ,deleteProduct);
 
 module.exports = router;

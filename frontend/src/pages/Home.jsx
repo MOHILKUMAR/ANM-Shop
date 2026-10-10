@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { beautyCategories } from "../data/beautyCategories.js";
+import { Shimmer } from "../components/Skeletons.jsx";
+import { useCategories } from "../useCategories.js";
 import { usePageMeta } from "../usePageMeta.js";
 
 const features = [
@@ -11,6 +12,7 @@ const features = [
 
 function Home() {
   usePageMeta({});
+  const { categories, loading, error } = useCategories();
   return (
     <main className="bg-gray-50">
       <section className="anm-hero-gradient relative overflow-hidden text-white">
@@ -39,7 +41,17 @@ function Home() {
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {beautyCategories.map((category, index) => (
+          {loading && [0, 1, 2, 3].map((index) => (
+            <div className="rounded-2xl border border-gray-200 bg-white p-6" key={index} aria-hidden="true">
+              <Shimmer className="h-11 w-11 rounded-full" />
+              <Shimmer className="mt-5 h-5 w-2/3 rounded" />
+              <Shimmer className="mt-3 h-4 w-full rounded" />
+            </div>
+          ))}
+          {!loading && error && (
+            <p className="text-gray-600 sm:col-span-2 lg:col-span-4">Categories could not be loaded. <Link className="font-semibold text-brand-700 underline" to="/shop">Browse every product</Link> instead.</p>
+          )}
+          {categories.map((category, index) => (
             <Link
               className={`group rounded-2xl border border-gray-200 p-6 transition hover:-translate-y-1 hover:border-brand-300 hover:shadow-lg ${index === 0 || index === 5 ? "bg-brand-50" : "bg-white"}`}
               key={category.name}

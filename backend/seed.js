@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const Product = require('./model/Product');
 const beautyProducts = require('./data/beautyProducts');
+const { ensureDefaultCategories } = require('./utils/categories');
 
 dotenv.config();
 
@@ -23,6 +24,8 @@ const seedBeautyCatalog = async () => {
             });
             console.log('Beauty demo catalog removed.');
         } else {
+            // The demo products use the default categories.
+            await ensureDefaultCategories();
             await Product.deleteMany({ name: { $in: legacyDemoProductNames } });
             for (const product of beautyProducts) {
                 await Product.updateOne(

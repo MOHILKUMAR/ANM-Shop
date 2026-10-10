@@ -1,5 +1,5 @@
 const Product = require('../model/Product');
-const beautyCategories = require('../constants/beautyCategories');
+const { categoryNames } = require('../utils/categories');
 
 // The storefront's address; FRONTEND_URL may list several origins and the first is the main one.
 const storefrontUrl = () => (process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim().replace(/\/+$/, '');
@@ -27,11 +27,12 @@ const PAGES = [
 const sitemap = async (req, res) => {
     try {
         const site = storefrontUrl();
-        const products = await Product.find({ category: { $in: beautyCategories } })
+        const categories = await categoryNames();
+        const products = await Product.find({ category: { $in: categories } })
             .select('_id createdAt').sort({ createdAt: -1 }).limit(45000).lean();
         const urls = [
             ...PAGES.map(([path, changefreq, priority]) => ({ loc: `${site}${path}`, changefreq, priority })),
-            ...beautyCategories.map((category) => ({ loc: `${site}/shop?category=${encodeURIComponent(category)}`, changefreq: 'daily', priority: '0.8' })),
+            ...categories.map((category) => ({ loc: `${site}/shop?category=${encodeURIComponent(category)}`, changefreq: 'daily', priority: '0.8' })),
             ...products.map((product) => ({ loc: `${site}/product/${product._id}`, lastmod: day(product.createdAt), changefreq: 'weekly', priority: '0.7' })),
         ];
         const body = urls.map((url) => [

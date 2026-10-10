@@ -7,30 +7,32 @@ import AdminUsers from "../components/AdminUsers.jsx";
 import AdminTickets from "../components/AdminTickets.jsx";
 import AdminCoupons from "../components/AdminCoupons.jsx";
 import AdminReviews from "../components/AdminReviews.jsx";
+import AdminCategories from "../components/AdminCategories.jsx";
+import AdminOrders from "../components/AdminOrders.jsx";
 import { ListSkeleton, StatTilesSkeleton } from "../components/Skeletons.jsx";
-import { beautyCategories } from "../data/beautyCategories.js";
+import { useCategories } from "../useCategories.js";
+import ProductPhotos, { MAX_PHOTOS, MAX_PHOTO_BYTES } from "../components/ProductPhotos.jsx";
 import { productImage } from "../imageUrl.js";
 import { usePageMeta } from "../usePageMeta.js";
 import { formatInr } from "../money.js";
 
-// The shared list holds { name, description, icon } for the home page; the admin form needs names.
-const categoryNames = beautyCategories.map((category) => category.name);
-
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // the server's upload limit
-const emptyProduct = { name: "", description: "", price: "", category: "Skincare", stock: "" };
+const emptyProduct = { name: "", description: "", price: "", category: "", stock: "" };
 
 function AdminDashboard() {
   const { user } = useContext(AuthContext);
   usePageMeta({ title: "Admin dashboard", noindex: true });
+  const { categories } = useCategories();
+  const categoryNames = categories.map((category) => category.name);
   const [stats, setStats] = useState(null);
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [productPage, setProductPage] = useState(1);
-  const [orders, setOrders] = useState([]);
   const [tab, setTab] = useState("products");
   const [product, setProduct] = useState(emptyProduct);
   const [editingProductId, setEditingProductId] = useState(null);
-  const [image, setImage] = useState(null);
+  // Saved photos kept when editing, and new photos to upload.
+  const [keptImages, setKeptImages] = useState([]);
+  const [newImages, setNewImages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -45,14 +47,12 @@ function AdminDashboard() {
     Promise.all([
       apiRequest("/analytics", { token: user.token }),
       apiRequest(`/products/manage?page=${productPage}&limit=50`, { token: user.token }),
-      apiRequest("/orders", { token: user.token }),
     ])
-      .then(([nextStats, nextProducts, nextOrders]) => {
+      .then(([nextStats, nextProducts]) => {
         if (!active) return;
         setStats(nextStats);
         setProducts(nextProducts.items || []);
         setProductPagination(nextProducts.pagination || { page: 1, pages: 1, total: 0 });
-        setOrders(nextOrders);
       })
       .catch((requestError) => {
         if (active) setError(requestError.message);
@@ -89,8 +89,16 @@ function AdminDashboard() {
       setError("Enter a product name and description.");
       return;
     }
-    if (image && image.size > MAX_IMAGE_BYTES) {
-      setError("The image must be 5 MB or smaller. Choose a smaller JPEG, PNG, or WebP file.");
+    if (keptImages.length + newImages.length === 0) {
+      setError("Add at least one photo.");
+      return;
+    }
+    if (keptImages.length + newImages.length > MAX_PHOTOS) {
+      setError(`A product can have at most ${MAX_PHOTOS} photos.`);
+      return;
+    }
+    if (newImages.some((file) => file.size > MAX_PHOTO_BYTES)) {
+      setError("Each photo must be 5 MB or smaller. Remove the ones marked too large.");
       return;
     }
     setBusy(true);
@@ -100,7 +108,8 @@ function AdminDashboard() {
     try {
       const body = new FormData();
       Object.entries(product).forEach(([key, value]) => body.append(key, value));
-      if (image) body.append("image", image);
+      newImages.forEach((file) => body.append("images", file));
+      if (editingProductId) body.append("keepImages", JSON.stringify(keptImages));
       await apiRequest(editingProductId ? `/products/${editingProductId}` : "/products", {
         method: editingProductId ? "PUT" : "POST",
         token: user.token,
@@ -108,7 +117,8 @@ function AdminDashboard() {
       });
       setNotice(editingProductId ? "Product updated." : "Product added to the beauty catalog.");
       setProduct(emptyProduct);
-      setImage(null);
+      setKeptImages([]);
+      setNewImages([]);
       setEditingProductId(null);
       form.reset();
       setRefreshKey((key) => key + 1);
@@ -131,44 +141,18 @@ function AdminDashboard() {
     }
   }
 
-  async function deleteOrder(order) {
-    const code = `#${order._id.slice(-8).toUpperCase()}`;
-    if (!window.confirm(`Delete order ${code}?\n\nThis removes the order record only. It does NOT refund the customer or restore stock. The payment record is kept.`)) return;
-    setError("");
-    try {
-      const result = await apiRequest(`/orders/${order._id}`, { method: "DELETE", token: user.token });
-      setNotice(result.message);
-      setRefreshKey((key) => key + 1);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  }
-
-  async function updateStatus(orderId, status) {
-    setError("");
-    try {
-      await apiRequest(`/orders/${orderId}/status`, {
-        method: "PUT",
-        token: user.token,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      setRefreshKey((key) => key + 1);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  }
-
   function startEditing(item) {
     setEditingProductId(item._id);
     setProduct({
       name: item.name,
       description: item.description,
       price: String(item.price),
-      category: categoryNames.includes(item.category) ? item.category : "Skincare",
+      // A product in a deleted or renamed category must be given a current one before saving.
+      category: categoryNames.includes(item.category) ? item.category : "",
       stock: String(item.stock),
     });
-    setImage(null);
+    setKeptImages(item.images?.length ? item.images : [item.imageUrls].filter(Boolean));
+    setNewImages([]);
     setNotice("");
   }
 
@@ -179,7 +163,7 @@ function AdminDashboard() {
       {error && <p className="mb-5 rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
       {notice && <p className="mb-5 rounded-lg bg-green-50 p-4 text-green-800" role="status">{notice}</p>}
 
-      {/* Stats, products, and orders arrive together, so one flag covers the first load. */}
+      {/* Stats and products arrive together, so one flag covers the first load. */}
       {loadingData ? <StatTilesSkeleton /> : (
       <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
@@ -242,6 +226,8 @@ function AdminDashboard() {
                 ["Pending", stats.orderStatus?.pending || 0, "bg-amber-500"],
                 ["Shipped", stats.orderStatus?.shipped || 0, "bg-brand-500"],
                 ["Delivered", stats.orderStatus?.delivered || 0, "bg-emerald-500"],
+                ["Cancelled", stats.orderStatus?.cancelled || 0, "bg-gray-400"],
+                ["Returned", stats.orderStatus?.returned || 0, "bg-gray-500"],
               ].map(([label, value, color]) => (
                 <div key={label}>
                   <div className="mb-2 flex justify-between text-sm"><span className="text-gray-600">{label}</span><span className="font-semibold text-gray-900">{value}</span></div>
@@ -272,7 +258,7 @@ function AdminDashboard() {
       )}
 
       <div className="mb-6 flex gap-3 overflow-x-auto border-b border-gray-200">
-        {["products", "orders", "coupons", "reviews", "tickets", "users", "search"].map((item) => (
+        {["products", "categories", "orders", "coupons", "reviews", "tickets", "users", "search"].map((item) => (
           <button className={`border-b-2 px-4 py-3 font-semibold capitalize ${tab === item ? "border-brand-600 text-brand-800" : "border-transparent text-gray-500"}`} key={item} type="button" onClick={() => setTab(item)}>{item}</button>
         ))}
       </div>
@@ -305,16 +291,13 @@ function AdminDashboard() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="product-category">Category</label>
               <select className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand-500" id="product-category" required value={product.category} onChange={(event) => setProduct((current) => ({ ...current, category: event.target.value }))}>
+                <option value="" disabled>Choose a category</option>
                 {categoryNames.map((category) => <option value={category} key={category}>{category}</option>)}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="product-image">Product image</label>
-              <p className="mb-1 text-xs text-gray-500" id="product-image-hint">JPEG, PNG, or WebP, up to 5 MB.</p>
-              <input className="w-full text-sm text-gray-600" id="product-image" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="product-image-hint" required={!editingProductId} onChange={(event) => setImage(event.target.files?.[0] || null)} />
-            </div>
+            <ProductPhotos kept={keptImages} onKeptChange={setKeptImages} added={newImages} onAddedChange={setNewImages} />
             <button className="w-full rounded-lg bg-brand-700 px-4 py-2.5 font-semibold text-white hover:bg-brand-800 disabled:opacity-60" type="submit" disabled={busy}>{busy ? "Saving..." : editingProductId ? "Save changes" : "Add product"}</button>
-            {editingProductId && <button className="w-full rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-50" type="button" onClick={() => { setEditingProductId(null); setProduct(emptyProduct); setImage(null); }}>Cancel edit</button>}
+            {editingProductId && <button className="w-full rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-50" type="button" onClick={() => { setEditingProductId(null); setProduct(emptyProduct); setKeptImages([]); setNewImages([]); }}>Cancel edit</button>}
           </form>
 
           <section className="space-y-3">
@@ -344,34 +327,17 @@ function AdminDashboard() {
       ) : tab === "search" ? (
         <AdminSearch token={user.token} />
       ) : tab === "users" ? (
-        <AdminUsers token={user.token} />
+        <AdminUsers token={user.token} currentUserId={user._id} />
       ) : tab === "tickets" ? (
         <AdminTickets token={user.token} />
       ) : tab === "coupons" ? (
         <AdminCoupons token={user.token} />
       ) : tab === "reviews" ? (
         <AdminReviews token={user.token} />
+      ) : tab === "categories" ? (
+        <AdminCategories token={user.token} />
       ) : (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Customer orders{loadingData ? "" : ` (${orders.length})`}</h2>
-          {loadingData && <ListSkeleton rows={4} label="Loading orders" />}
-          {orders.map((order) => (
-            <article className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 md:flex-row md:items-center" key={order._id}>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-gray-900">Order #{order._id.slice(-8).toUpperCase()}</h3>
-                <p className="mt-1 text-sm text-gray-500">{order.user?.name || "Customer"} | {order.user?.email || ""} | {new Date(order.createdAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</p>
-                <p className="mt-2 text-sm text-gray-700">{order.items.map((item) => `${item.productId?.name || "Product"} x ${item.qty}`).join(", ")}</p>
-              </div>
-              <p className="font-semibold text-gray-900">{formatInr(order.totalAmount)}</p>
-              <label className="sr-only" htmlFor={`status-${order._id}`}>Order status</label>
-              <select className="rounded-lg border border-gray-300 px-3 py-2 capitalize" id={`status-${order._id}`} value={order.status} onChange={(event) => updateStatus(order._id, event.target.value)}>
-                {["pending", "shipped", "delivered"].map((status) => <option className="capitalize" key={status} value={status}>{status}</option>)}
-              </select>
-              <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
-            </article>
-          ))}
-          {!loadingData && orders.length === 0 && <p className="rounded-xl bg-gray-50 p-6 text-gray-600">No orders yet.</p>}
-        </section>
+        <AdminOrders token={user.token} onChanged={() => setRefreshKey((key) => key + 1)} />
       )}
     </main>
   );

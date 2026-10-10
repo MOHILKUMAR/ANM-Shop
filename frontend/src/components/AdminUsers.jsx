@@ -36,9 +36,12 @@ async function downloadExcel(users) {
   }).toFile(`anm-shop-users-${today}.xlsx`);
 }
 
-function AdminUsers({ token }) {
+// `currentUserId` is the signed-in admin, whose own role can't be changed here.
+function AdminUsers({ token, currentUserId }) {
   const [users, setUsers] = useState(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [changingId, setChangingId] = useState("");
   const [filter, setFilter] = useState("");
   const [exporting, setExporting] = useState(false);
 
@@ -59,6 +62,32 @@ function AdminUsers({ token }) {
   const term = filter.trim().toLowerCase();
   const visible = (users || []).filter((user) =>
     !term || user.name.toLowerCase().includes(term) || user.email.toLowerCase().includes(term));
+
+  async function changeRole(user, role) {
+    const question = role === "admin"
+      ? `Make ${user.name} (${user.email}) an admin?
+
+Admins can see every order, payment and customer, issue refunds and change the shop.`
+      : `Make ${user.name} (${user.email}) a customer? They lose access to the admin dashboard at once.`;
+    if (!window.confirm(question)) return;
+    setChangingId(user._id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiRequest(`/auth/users/${user._id}/role`, {
+        method: "PUT",
+        token,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      setUsers((current) => current.map((item) => (item._id === user._id ? { ...item, role: result.user.role } : item)));
+      setNotice(result.message);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setChangingId("");
+    }
+  }
 
   async function exportUsers() {
     setExporting(true);
@@ -88,6 +117,7 @@ function AdminUsers({ token }) {
         </div>
       </div>
 
+      {notice && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800" role="status">{notice}</p>}
       {error && <p className="rounded-lg bg-red-50 p-4 text-red-700" role="alert">{error}</p>}
       {!users && !error && <TableSkeleton rows={8} columns={7} label="Loading user accounts" />}
       {users && visible.length === 0 && (
@@ -116,6 +146,19 @@ function AdminUsers({ token }) {
                     {user.role === "admin"
                       ? <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800">Admin</span>
                       : <span className="text-gray-700">Customer</span>}
+                    {user._id === currentUserId ? (
+                      <span className="ml-2 text-xs text-gray-400">(you)</span>
+                    ) : (
+                      <button
+                        className="ml-2 text-xs font-semibold text-brand-700 hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline"
+                        type="button"
+                        disabled={changingId === user._id || (user.role !== "admin" && !user.verified)}
+                        title={user.role !== "admin" && !user.verified ? "Only verified accounts can become admins" : undefined}
+                        onClick={() => changeRole(user, user.role === "admin" ? "user" : "admin")}
+                      >
+                        {changingId === user._id ? "Saving…" : user.role === "admin" ? "Make customer" : "Make admin"}
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${user.verified ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>

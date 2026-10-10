@@ -97,23 +97,34 @@ const addTicketMessage = async (req, res) => {
     }
 };
 
+// GET /api/tickets — every ticket for admins, latest activity first, 50 per page.
+const ADMIN_PAGE_SIZE = 50;
 const listTickets = async (req, res) => {
     const status = typeof req.query.status === 'string' ? req.query.status : '';
     if (status && !TICKET_STATUSES.includes(status)) return res.status(400).json({ message: 'Invalid ticket status' });
+    const page = Number.parseInt(req.query.page, 10) || 1;
+    if (page < 1) return res.status(400).json({ message: 'Invalid page number' });
+    const filter = status ? { status } : {};
 
     try {
-        const [tickets, counts] = await Promise.all([
-            Ticket.find(status ? { status } : {})
+        const [tickets, total, counts] = await Promise.all([
+            Ticket.find(filter)
                 .sort({ lastActivityAt: -1 })
-                .limit(200)
+                .skip((page - 1) * ADMIN_PAGE_SIZE)
+                .limit(ADMIN_PAGE_SIZE)
                 .populate('user', 'name email')
                 .populate('order', 'totalAmount status paymentId createdAt')
                 .lean(),
+            Ticket.countDocuments(filter),
             Ticket.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
         ]);
         const byStatus = Object.fromEntries(TICKET_STATUSES.map((value) => [value, 0]));
         counts.forEach(({ _id, count }) => { if (_id in byStatus) byStatus[_id] = count; });
-        return res.json({ tickets: tickets.map((ticket) => serializeTicket(ticket, { forAdmin: true })), counts: byStatus });
+        return res.json({
+            tickets: tickets.map((ticket) => serializeTicket(ticket, { forAdmin: true })),
+            counts: byStatus,
+            pagination: { page, limit: ADMIN_PAGE_SIZE, total, pages: Math.ceil(total / ADMIN_PAGE_SIZE) },
+        });
     } catch (error) {
         return handleError(res, error, 'Unable to load tickets');
     }

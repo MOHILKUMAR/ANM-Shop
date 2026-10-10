@@ -8,6 +8,7 @@ import { formatInr } from "../money.js";
 
 function AdminTickets({ token }) {
   const [filter, setFilter] = useState("open");
+  const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [error, setError] = useState("");
@@ -15,7 +16,9 @@ function AdminTickets({ token }) {
 
   useEffect(() => {
     let active = true;
-    apiRequest(`/tickets${filter ? `?status=${filter}` : ""}`, { token })
+    const query = new URLSearchParams({ page: String(page) });
+    if (filter) query.set("status", filter);
+    apiRequest(`/tickets?${query}`, { token })
       .then((result) => {
         if (active) setData(result);
       })
@@ -25,12 +28,18 @@ function AdminTickets({ token }) {
     return () => {
       active = false;
     };
-  }, [token, filter, refreshKey]);
+  }, [token, filter, page, refreshKey]);
 
   function chooseFilter(next) {
     setData(null);
     setError("");
     setFilter(next);
+    setPage(1);
+  }
+
+  function goToPage(next) {
+    setData(null);
+    setPage(next);
   }
 
   // Replace one ticket in place, or drop it when it no longer matches the status filter.
@@ -69,6 +78,7 @@ function AdminTickets({ token }) {
   }
 
   const counts = data?.counts;
+  const pagination = data?.pagination;
   const filters = [["", "All"], ...Object.entries(ticketStatuses).map(([value, [label]]) => [value, label])];
 
   return (
@@ -122,6 +132,13 @@ function AdminTickets({ token }) {
           )}
         </article>
       ))}
+      {pagination?.pages > 1 && (
+        <nav className="flex items-center justify-center gap-4" aria-label="Ticket pages">
+          <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40" type="button" disabled={page <= 1 || !data} onClick={() => goToPage(page - 1)}>Previous</button>
+          <span className="text-sm text-gray-600">Page {pagination.page} of {pagination.pages}</span>
+          <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40" type="button" disabled={page >= pagination.pages || !data} onClick={() => goToPage(page + 1)}>Next</button>
+        </nav>
+      )}
     </section>
   );
 }

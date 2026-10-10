@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../api.js";
 import { ListSkeleton } from "./Skeletons.jsx";
-import { beautyCategories } from "../data/beautyCategories.js";
+import { useCategories } from "../useCategories.js";
+import ProductPicker from "./ProductPicker.jsx";
 import { formatInr } from "../money.js";
 
 const day = (date) => (date ? new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" }) : null);
@@ -49,7 +50,7 @@ const toForm = (coupon) => ({
   perUserLimit: coupon.perUserLimit ?? "",
   startsAt: toLocalInput(coupon.startsAt),
   expiresAt: toLocalInput(coupon.expiresAt),
-  applicableProducts: (coupon.applicableProducts || []).map((product) => product._id),
+  applicableProducts: (coupon.applicableProducts || []).map((product) => ({ _id: product._id, name: product.name || "Deleted product" })),
   applicableUserEmails: (coupon.applicableUserEmails || []).join(", "),
 });
 
@@ -73,8 +74,8 @@ function Field({ label, htmlFor, hint, children, className = "" }) {
 }
 
 function AdminCoupons({ token }) {
+  const { categories: shopCategories } = useCategories();
   const [coupons, setCoupons] = useState(null);
-  const [products, setProducts] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -83,14 +84,9 @@ function AdminCoupons({ token }) {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      apiRequest("/coupons", { token }),
-      apiRequest("/products/manage?limit=100", { token }).then((result) => result.items || []).catch(() => []),
-    ])
-      .then(([couponList, productList]) => {
-        if (!active) return;
-        setCoupons(couponList);
-        setProducts(productList);
+    apiRequest("/coupons", { token })
+      .then((couponList) => {
+        if (active) setCoupons(couponList);
       })
       .catch((requestError) => {
         if (active) setError(requestError.message);
@@ -136,6 +132,7 @@ function AdminCoupons({ token }) {
     setNotice("");
     const payload = {
       ...form,
+      applicableProducts: form.applicableProducts.map((product) => product._id),
       applicableUserEmails: form.applicableUserEmails.split(/[\s,;]+/).filter(Boolean),
       startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : "",
       expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : "",
@@ -242,7 +239,7 @@ function AdminCoupons({ token }) {
           <legend className="mb-1 text-sm font-medium text-gray-700">Applicable categories</legend>
           <p className="mb-2 text-xs text-gray-500">None selected means all products.</p>
           <div className="flex flex-wrap gap-2">
-            {beautyCategories.map((category) => (
+            {shopCategories.map((category) => (
               <button className={`rounded-full border px-3 py-1 text-xs font-medium ${form.applicableCategories.includes(category.name) ? "border-brand-600 bg-brand-50 text-brand-800" : "border-gray-300 text-gray-600"}`} type="button" key={category.name} aria-pressed={form.applicableCategories.includes(category.name)} onClick={() => toggleIn("applicableCategories", category.name)}>
                 {category.name}
               </button>
@@ -250,10 +247,8 @@ function AdminCoupons({ token }) {
           </div>
         </fieldset>
 
-        <Field label="Applicable products" htmlFor="coupon-products" hint="Optional. Ctrl/Cmd-click to select several.">
-          <select id="coupon-products" className={`${inputClass} bg-white`} multiple size={4} value={form.applicableProducts} onChange={(event) => update("applicableProducts")([...event.target.selectedOptions].map((option) => option.value))}>
-            {products.map((product) => <option key={product._id} value={product._id}>{product.name}</option>)}
-          </select>
+        <Field label="Applicable products" htmlFor="coupon-products" hint="Optional. Search and add products; none means all products.">
+          <ProductPicker id="coupon-products" token={token} selected={form.applicableProducts} onChange={update("applicableProducts")} />
         </Field>
 
         <Field label="Applicable customers" htmlFor="coupon-users" hint="Email addresses, comma separated. Blank means everyone.">

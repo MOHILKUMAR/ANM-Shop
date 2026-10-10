@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Product = require('../model/Product');
 const Coupon = require('../model/Coupon');
 const CouponUsage = require('../model/CouponUsage');
-const beautyCategories = require('../constants/beautyCategories');
+const { categoryNames } = require('./categories');
 
 // All money here is in paise (integers) so totals never pick up floating-point errors.
 const rupeesToPaise = (value) => Math.round(Number(value) * 100);
@@ -47,7 +47,7 @@ const loadCartLines = async (items) => {
         quantities.set(productId, combinedQty);
     }
 
-    const products = await Product.find({ _id: { $in: [...quantities.keys()] }, category: { $in: beautyCategories } });
+    const products = await Product.find({ _id: { $in: [...quantities.keys()] }, category: { $in: await categoryNames() } });
     if (products.length !== quantities.size) {
         const found = new Set(products.map((product) => product._id.toString()));
         const unavailableProductIds = [...quantities.keys()].filter((id) => !found.has(id));

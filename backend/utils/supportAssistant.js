@@ -4,7 +4,7 @@ const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
 const Product = require('../model/Product');
 const Ticket = require('../model/Ticket');
-const beautyCategories = require('../constants/beautyCategories');
+const { categoryNames } = require('./categories');
 const { shortCode, customerOrderFilter } = require('./orderLookup');
 const { TicketError, createTicket, statusLabels, TICKET_CATEGORIES } = require('./tickets');
 
@@ -33,7 +33,8 @@ How the store works:
 - Shipping is ₹49 on orders under ₹499 of items and free above that. One coupon can be used per order: the customer enters it on the checkout page, and their available coupons are listed on their Account page. You cannot create or apply coupons.
 - An order is created only after its payment succeeds. Order status is pending (being prepared), shipped, or delivered.
 - A payment record is one checkout attempt. Its status is awaiting payment, paid, refund in progress, refunded, or refund failed. An "awaiting payment" record older than a day is an abandoned checkout and no money was taken. If an item sold out while the customer was paying, the payment is refunded automatically; refunds usually reach the account in 5 to 7 working days.
-- You cannot cancel orders, issue or speed up refunds, change delivery addresses, or promise outcomes. When the customer needs the store team to act (a return, a cancellation, a damaged or wrong item, a refund that failed or is overdue, a delivery problem), find the order, collect what happened, open a ticket with a complete description the team can act on without re-asking, and give the customer the ticket number. The team replies on the customer's Support page.
+- Customers can cancel an order themselves on their My orders page while its status is pending (not shipped yet); the full amount is refunded automatically, usually within 5 to 7 working days. Tell them how when they ask; you cannot cancel it for them. Shipped or delivered orders are returned through a ticket: the team checks the return and refunds it. Order statuses are pending, shipped, delivered, cancelled and returned.
+- You cannot cancel orders, issue or speed up refunds, change delivery addresses, or promise outcomes. When the customer needs the store team to act (a return, a damaged or wrong item, a refund that failed or is overdue, a delivery problem), find the order, collect what happened, open a ticket with a complete description the team can act on without re-asking, and give the customer the ticket number. The team replies on the customer's Support page.
 - Open a ticket only when the team needs to act or the customer asks for one, and only once per problem in this chat.
 
 Rules:
@@ -74,7 +75,7 @@ const TOOLS = [
             type: 'object',
             properties: {
                 query: { type: 'string', description: 'Words from the product name or description, e.g. "vitamin c serum"' },
-                category: { type: 'string', enum: beautyCategories, description: 'Optional category filter' },
+                category: { type: 'string', description: 'Optional category filter, e.g. "Skincare" (an unknown name returns the list of categories)' },
             },
             additionalProperties: false,
         },
@@ -134,6 +135,9 @@ const serializeOrder = (order) => ({
     discount_inr: order.discountAmount || 0,
     coupon: order.couponCode || null,
     payment_id: order.paymentId || null,
+    refund: order.refund?.status
+        ? { status: order.refund.status === 'failed' ? 'failed (the team will refund manually)' : order.refund.status, amount_inr: order.refund.amount, razorpay_refund_id: order.refund.razorpayRefundId || null }
+        : null,
 });
 
 const serializePayment = (payment) => ({
@@ -176,9 +180,10 @@ const toolHandlers = {
     },
 
     async search_products(input) {
-        const filter = { category: { $in: beautyCategories } };
+        const categories = await categoryNames();
+        const filter = { category: { $in: categories } };
         if (input.category !== undefined) {
-            if (!beautyCategories.includes(input.category)) throw new ToolInputError('Unknown category');
+            if (!categories.includes(input.category)) throw new ToolInputError(`Unknown category. The categories are: ${categories.join(', ')}`);
             filter.category = input.category;
         }
         if (input.query !== undefined) {
@@ -207,7 +212,7 @@ const toolHandlers = {
         if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 10) {
             throw new ToolInputError('quantity must be a whole number from 1 to 10');
         }
-        const product = await Product.findOne({ _id: input.product_id, category: { $in: beautyCategories } })
+        const product = await Product.findOne({ _id: input.product_id, category: { $in: await categoryNames() } })
             .select('name price stock category description imageUrls').lean();
         if (!product) return { added: false, note: 'That product is no longer available.' };
         if (product.stock < 1) return { added: false, note: `${product.name} is out of stock.` };
