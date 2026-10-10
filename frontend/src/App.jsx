@@ -31,7 +31,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 function PageLoading() {
   return (
-    <div className="mx-auto min-h-[60vh] max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-12 sm:px-6 lg:px-8">
       <ListSkeleton rows={4} label="Loading page" />
     </div>
   );
@@ -43,8 +43,9 @@ function App() {
       <ScrollToTop />
       <div className="flex min-h-screen flex-col">
         <Navbar />
-        <div className="flex-1">
-          <Suspense fallback={<PageLoading />}>
+        {/* The footer waits with the page: shown early, it would jump down when the page arrives. */}
+        <Suspense fallback={<PageLoading />}>
+          <div className="flex-1">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/shop" element={<Shop />} />
@@ -67,9 +68,9 @@ function App() {
               <Route path="/returns" element={<ReturnsPolicy />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </Suspense>
-        </div>
-        <Footer />
+          </div>
+          <Footer />
+        </Suspense>
         <ChatWidget />
         <ConsentBanner />
         <SiteAnalytics />

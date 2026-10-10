@@ -45,10 +45,11 @@ export function ProductGridSkeleton({ count = 8 }) {
   );
 }
 
-// Mirrors the ProductDetail layout: image on the left, details on the right.
+// Mirrors the ProductDetail layout: image on the left, details on the right. A full screen tall,
+// so the footer starts out of view instead of jumping down when the (taller) product arrives.
 export function ProductDetailSkeleton() {
   return (
-    <main className="mx-auto min-h-[60vh] max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
+    <main className="mx-auto min-h-screen max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
       <LoadingRegion label="Loading product">
         <Shimmer className="mb-8 h-5 w-28" />
         <div className="grid gap-10 rounded-2xl bg-white p-6 shadow-sm md:grid-cols-2 md:p-10">
