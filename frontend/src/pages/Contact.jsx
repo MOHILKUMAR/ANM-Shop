@@ -1,7 +1,21 @@
-import { supportEmail, linkedinProfile } from "../data/contactInfo.js";
+import { supportEmail, linkedinProfile, business, grievanceOfficer, showBusinessDetails, showGrievanceOfficer } from "../data/contactInfo.js";
 import { usePageMeta } from "../usePageMeta.js";
 
+const linkClass = "font-medium text-brand-700 underline";
+const telHref = (phone) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+
+function Detail({ label, children }) {
+  return (
+    <div>
+      <dt className="text-sm text-gray-500">{label}</dt>
+      <dd className="mt-0.5 break-words text-gray-900">{children}</dd>
+    </div>
+  );
+}
+
 function Contact() {
+  const showBusiness = showBusinessDetails();
+  const showGrievance = showGrievanceOfficer();
   usePageMeta({
     title: "Contact us",
     description: "Questions about a product, an order, or a return? Email ANM-Shop support or open a ticket and we'll get back to you.",
@@ -27,6 +41,35 @@ function Contact() {
           <p className="mt-3 text-sm text-gray-500">Open the public profile in a new tab.</p>
         </a>
       </div>
+      {(showBusiness || showGrievance) && (
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          {showBusiness && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-7" aria-labelledby="business-details">
+              <h2 id="business-details" className="text-xl font-semibold text-gray-900">Business details</h2>
+              <dl className="mt-4 space-y-3">
+                <Detail label="Legal name">{business.legalName}</Detail>
+                <Detail label="Registered address">{business.address}</Detail>
+                {business.phone.trim() && <Detail label="Phone"><a className={linkClass} href={telHref(business.phone)}>{business.phone}</a></Detail>}
+                <Detail label="Email"><a className={`${linkClass} break-all`} href={`mailto:${supportEmail}`}>{supportEmail}</a></Detail>
+                {business.gstin.trim() && <Detail label="GSTIN">{business.gstin}</Detail>}
+              </dl>
+            </section>
+          )}
+          {showGrievance && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-7" aria-labelledby="grievance-officer">
+              <h2 id="grievance-officer" className="text-xl font-semibold text-gray-900">Grievance officer</h2>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                For a complaint about an order, a product, or how we handle your personal information. We acknowledge every complaint within {grievanceOfficer.acknowledgeWithin} and resolve it within {grievanceOfficer.resolveWithin}.
+              </p>
+              <dl className="mt-4 space-y-3">
+                <Detail label="Name">{grievanceOfficer.name}{grievanceOfficer.designation.trim() && `, ${grievanceOfficer.designation}`}</Detail>
+                <Detail label="Email"><a className={`${linkClass} break-all`} href={`mailto:${grievanceOfficer.email}`}>{grievanceOfficer.email}</a></Detail>
+                {grievanceOfficer.phone.trim() && <Detail label="Phone"><a className={linkClass} href={telHref(grievanceOfficer.phone)}>{grievanceOfficer.phone}</a></Detail>}
+              </dl>
+            </section>
+          )}
+        </div>
+      )}
       <p className="mt-8 text-sm text-gray-500">For order help, include your order number in your email. Do not send card numbers or passwords.</p>
     </main>
   );

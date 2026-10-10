@@ -1,8 +1,11 @@
 import { Link } from "react-router-dom";
-import { supportEmail } from "../data/contactInfo.js";
+import { supportEmail, business, grievanceOfficer, showBusinessDetails, showGrievanceOfficer } from "../data/contactInfo.js";
 import { usePageMeta } from "../usePageMeta.js";
 
-const sections = [
+// Built on each render: the business and grievance officer sections appear once their details
+// are filled in (data/contactInfo.js).
+const sections = () => [
+  showBusinessDetails() && ["Who we are", <>ANM-Shop is run by {business.legalName}, {business.address}{business.gstin.trim() && <> (GSTIN {business.gstin})</>}. You can reach us at <a className="font-medium text-brand-700 underline" href={`mailto:${supportEmail}`}>{supportEmail}</a>{business.phone.trim() && <> or {business.phone}</>}.</>],
   ["About these terms", <>These terms apply when you browse ANM-Shop, create an account, or place an order. By using the store you agree to them, together with our <Link className="font-medium text-brand-700 underline" to="/privacy">Privacy policy</Link> and <Link className="font-medium text-brand-700 underline" to="/returns">Returns and refunds policy</Link>. If you do not agree, please do not use the store.</>],
   ["Your account", <>You need an account with a verified email address to place orders, write reviews, and use support. Keep your password private; you are responsible for activity on your account. Tell us straight away at {supportEmail} if you think someone else has used it. We may suspend or close accounts that break these terms or are used for fraud or abuse.</>],
   ["Products and prices", <>We describe products and show their pictures as accurately as we can, but colours and packaging may differ slightly from what you see on screen. Prices are in Indian rupees (₹) and are confirmed by our server at checkout; the amount shown on the payment button is the amount charged. If a product sells out or a price is wrong, we may cancel the order and refund you in full.</>],
@@ -16,7 +19,7 @@ const sections = [
   ["Our content", <>The ANM-Shop name, logo, design, and content belong to ANM-Shop or its licensors. You may not copy or reuse them without permission.</>],
   ["Liability", <>We provide the store with reasonable care and skill. To the extent the law allows, we are not responsible for losses that were not foreseeable, that result from your misuse of a product or the store, or that are caused by events beyond our reasonable control. Our total liability for an order is limited to the amount you paid for it. Always read product labels and patch test new skincare and cosmetics.</>],
   ["Changes and governing law", <>We may update these terms; the version on this page when you place an order applies to that order. These terms are governed by the laws of India, and disputes are subject to the jurisdiction of the courts of India.</>],
-  ["Contact", <>Questions about these terms? Email <a className="font-medium text-brand-700 underline" href={`mailto:${supportEmail}`}>{supportEmail}</a> or open a ticket on the Support page.</>],
+  ["Contact", <>Questions about these terms? Email <a className="font-medium text-brand-700 underline" href={`mailto:${supportEmail}`}>{supportEmail}</a> or open a ticket on the Support page.{showGrievanceOfficer() && <> For a complaint, contact our grievance officer, {grievanceOfficer.name}, at <a className="font-medium text-brand-700 underline" href={`mailto:${grievanceOfficer.email}`}>{grievanceOfficer.email}</a> (details on the <Link className="font-medium text-brand-700 underline" to="/contact">Contact page</Link>).</>}</>],
 ];
 
 function Terms() {
@@ -30,7 +33,7 @@ function Terms() {
       <h1 className="mt-3 text-4xl font-semibold text-gray-900">Terms and conditions</h1>
       <p className="mt-3 text-sm text-gray-500">Last updated 4 October 2026.</p>
       <div className="mt-10 space-y-8 text-gray-700">
-        {sections.map(([heading, body]) => (
+        {sections().filter(Boolean).map(([heading, body]) => (
           <section key={heading}>
             <h2 className="text-xl font-semibold text-gray-900">{heading}</h2>
             <p className="mt-2 leading-7">{body}</p>

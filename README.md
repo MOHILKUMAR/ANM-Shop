@@ -88,6 +88,11 @@ build, on every pull request and on each push to `main`. It uses no secrets.
 - **Domains:** the shop and API addresses also appear in `frontend/index.html`,
   `frontend/public/robots.txt` and `frontend/vercel.json` (rewrite and Content-Security-Policy).
   Update them if either domain changes.
+- **Business details:** before taking real orders, fill in `business` and `grievanceOfficer` in
+  `frontend/src/data/contactInfo.js` (legal name, address, phone, GSTIN; the grievance officer's
+  name, email and phone). They ship empty, and each part appears on the Contact page, footer,
+  Terms and Privacy policy only once it is filled in. Update the "Last updated" dates on those
+  policy pages when you do.
 - **Content-Security-Policy:** if you edit the small inline script in `frontend/index.html`, run
   `npm run csp-hash` and put the new hash in `vercel.json` (the build fails until you do).
 
