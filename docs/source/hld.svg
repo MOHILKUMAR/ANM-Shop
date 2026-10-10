@@ -1,0 +1,133 @@
+<svg viewBox="0 0 1000 660" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#754656"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b8873f"/></marker>
+  </defs>
+  <style>
+    .box{fill:#fff;stroke:#c9a9b3;stroke-width:1.4}
+    .client{fill:#3d2733;stroke:none}
+    .svc{fill:#fbf3e2;stroke:#dfbd7b;stroke-width:1.4}
+    .frame{fill:#fbf5f4;stroke:#754656;stroke-width:1.6;stroke-dasharray:6 4}
+    .inner{fill:#fff;stroke:#d7aeb6;stroke-width:1.2}
+    .t{font-size:15.5px;font-weight:700;fill:#3d2733}
+    .s{font-size:12px;fill:#6b5d65}
+    .w{fill:#fff}
+    .ft{font-size:13px;font-weight:700;fill:#754656;letter-spacing:.5px}
+    .l{font-size:12px;fill:#754656;font-weight:600}
+    .lg{font-size:12px;fill:#8a6224;font-weight:600}
+    .ln{stroke:#754656;stroke-width:1.6;fill:none}
+    .lng{stroke:#b8873f;stroke-width:1.6;fill:none;stroke-dasharray:5 4}
+  </style>
+
+  <!-- Row 1: client -->
+  <rect class="client" x="300" y="16" width="400" height="74" rx="14"/>
+  <text class="t w" x="500" y="46" text-anchor="middle" style="fill:#fff">Customer or admin browser</text>
+  <text class="s" x="500" y="68" text-anchor="middle" style="fill:#e9cfd3">React app running on the shopper's phone or computer</text>
+
+  <!-- Row 2: edge services used directly by the browser -->
+  <rect class="box" x="40" y="140" width="280" height="86" rx="10"/>
+  <text class="t" x="180" y="166" text-anchor="middle">Vercel</text>
+  <text class="s" x="180" y="186" text-anchor="middle">React app: Vite build, lazy pages</text>
+  <text class="s" x="180" y="202" text-anchor="middle">Security headers · SPA rewrites</text>
+  <text class="s" x="180" y="218" text-anchor="middle">Analytics + Speed Insights (consent)</text>
+
+  <rect class="svc" x="360" y="140" width="280" height="86" rx="10"/>
+  <text class="t" x="500" y="166" text-anchor="middle">Razorpay Checkout</text>
+  <text class="s" x="500" y="186" text-anchor="middle">Payment window opened by the app</text>
+  <text class="s" x="500" y="202" text-anchor="middle">UPI · cards · net banking · wallets</text>
+
+  <rect class="svc" x="680" y="140" width="280" height="86" rx="10"/>
+  <text class="t" x="820" y="166" text-anchor="middle">Cloudinary CDN</text>
+  <text class="s" x="820" y="186" text-anchor="middle">Delivers product photos</text>
+  <text class="s" x="820" y="202" text-anchor="middle">resized per screen (f_auto, q_auto, w_…)</text>
+
+  <path class="ln" d="M380,90 L190,138" marker-end="url(#a)"/>
+  <text class="l" x="258" y="108">loads the app</text>
+  <path class="ln" d="M500,90 L500,138" marker-end="url(#a)"/>
+  <text class="l" x="508" y="120">pays</text>
+  <path class="ln" d="M620,90 L810,138" marker-end="url(#a)"/>
+  <text class="l" x="700" y="108">loads images</text>
+
+  <!-- Row 3: Render API -->
+  <rect class="frame" x="40" y="286" width="920" height="200" rx="14"/>
+  <text class="ft" x="60" y="310">RENDER · EXPRESS API (NODE.JS) — one service, REST + JSON</text>
+
+  <g>
+    <rect class="inner" x="60" y="326" width="160" height="62" rx="8"/>
+    <text class="t" x="140" y="350" text-anchor="middle" style="font-size:13px">Security</text>
+    <text class="s" x="140" y="368" text-anchor="middle">helmet · CORS</text>
+    <text class="s" x="140" y="382" text-anchor="middle">body limits · trust proxy</text>
+
+    <rect class="inner" x="242" y="326" width="160" height="62" rx="8"/>
+    <text class="t" x="322" y="350" text-anchor="middle" style="font-size:13px">Abuse limits</text>
+    <text class="s" x="322" y="368" text-anchor="middle">rate limiters</text>
+    <text class="s" x="322" y="382" text-anchor="middle">spam guard (honeypot)</text>
+
+    <rect class="inner" x="424" y="326" width="160" height="62" rx="8"/>
+    <text class="t" x="504" y="350" text-anchor="middle" style="font-size:13px">Auth</text>
+    <text class="s" x="504" y="368" text-anchor="middle">protect (JWT)</text>
+    <text class="s" x="504" y="382" text-anchor="middle">admin role check</text>
+
+    <rect class="inner" x="606" y="326" width="160" height="62" rx="8"/>
+    <text class="t" x="686" y="350" text-anchor="middle" style="font-size:13px">Controllers</text>
+    <text class="s" x="686" y="368" text-anchor="middle">auth · products · payment</text>
+    <text class="s" x="686" y="382" text-anchor="middle">orders · coupons · support</text>
+
+    <rect class="inner" x="788" y="326" width="152" height="62" rx="8"/>
+    <text class="t" x="864" y="350" text-anchor="middle" style="font-size:13px">Services</text>
+    <text class="s" x="864" y="368" text-anchor="middle">pricing · email</text>
+    <text class="s" x="864" y="382" text-anchor="middle">AI assistant · fix-ups</text>
+
+    <path class="ln" d="M220,357 H240" marker-end="url(#a)"/>
+    <path class="ln" d="M402,357 H422" marker-end="url(#a)"/>
+    <path class="ln" d="M584,357 H604" marker-end="url(#a)"/>
+    <path class="ln" d="M766,357 H786" marker-end="url(#a)"/>
+
+    <rect class="inner" x="60" y="404" width="880" height="62" rx="8"/>
+    <text class="t" x="500" y="428" text-anchor="middle" style="font-size:13px">Mongoose models</text>
+    <text class="s" x="500" y="448" text-anchor="middle">User · Product · Category · Review · Order · PaymentIntent · Coupon · CouponUsage · Ticket · ChatConversation</text>
+  </g>
+
+  <!-- browser to API (routed around the left) -->
+  <path class="ln" d="M300,53 H18 V357 H58" marker-end="url(#a)"/>
+  <text class="l" x="11" y="258" transform="rotate(-90 11 258)" text-anchor="middle">API calls · JSON · JWT bearer token</text>
+  <!-- vercel sitemap rewrite -->
+  <path class="lng" d="M180,226 V284" marker-end="url(#g)"/>
+  <text class="lg" x="188" y="262">/sitemap.xml proxied to API</text>
+  <!-- checkout result to API -->
+  <path class="lng" d="M500,226 V284" marker-end="url(#g)"/>
+  <text class="lg" x="508" y="262">payment result → /api/payment/verify</text>
+
+  <!-- Row 4: backing services -->
+  <rect class="svc" x="40" y="560" width="166" height="74" rx="10"/>
+  <text class="t" x="123" y="590" text-anchor="middle">MongoDB Atlas</text>
+  <text class="s" x="123" y="610" text-anchor="middle">all shop data</text>
+
+  <rect class="svc" x="224" y="560" width="166" height="74" rx="10"/>
+  <text class="t" x="307" y="590" text-anchor="middle">Razorpay API</text>
+  <text class="s" x="307" y="610" text-anchor="middle">orders · refunds · webhook</text>
+
+  <rect class="svc" x="408" y="560" width="166" height="74" rx="10"/>
+  <text class="t" x="491" y="590" text-anchor="middle">Cloudinary</text>
+  <text class="s" x="491" y="610" text-anchor="middle">product image upload</text>
+
+  <rect class="svc" x="592" y="560" width="166" height="74" rx="10"/>
+  <text class="t" x="675" y="590" text-anchor="middle">Google Gemini</text>
+  <text class="s" x="675" y="610" text-anchor="middle">support chat assistant</text>
+
+  <rect class="svc" x="776" y="560" width="184" height="74" rx="10"/>
+  <text class="t" x="868" y="590" text-anchor="middle">Email</text>
+  <text class="s" x="868" y="610" text-anchor="middle">Resend API or Gmail SMTP</text>
+
+  <path class="ln" d="M123,486 V558" marker-end="url(#a)"/>
+  <text class="l" x="130" y="528">Mongoose</text>
+  <path class="ln" d="M290,486 V558" marker-end="url(#a)"/>
+  <path class="lng" d="M324,558 V488" marker-end="url(#g)"/>
+  <text class="lg" x="332" y="528">webhook</text>
+  <path class="ln" d="M491,486 V558" marker-end="url(#a)"/>
+  <text class="l" x="498" y="528">upload</text>
+  <path class="ln" d="M675,486 V558" marker-end="url(#a)"/>
+  <text class="l" x="682" y="528">chat</text>
+  <path class="ln" d="M868,486 V558" marker-end="url(#a)"/>
+  <text class="l" x="875" y="528">OTP · bills · replies</text>
+</svg>
