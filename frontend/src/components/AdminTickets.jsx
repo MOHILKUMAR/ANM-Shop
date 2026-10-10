@@ -5,6 +5,7 @@ import { TicketSummary, TicketThread } from "./TicketThread.jsx";
 import { ticketStatuses } from "../data/tickets.js";
 import { formatInr } from "../money.js";
 
+const ticketQuery = (page, status) => new URLSearchParams({ page: String(page), ...(status ? { status } : {}) });
 
 function AdminTickets({ token }) {
   const [filter, setFilter] = useState("open");
@@ -12,15 +13,19 @@ function AdminTickets({ token }) {
   const [data, setData] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [error, setError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
-    const query = new URLSearchParams({ page: String(page) });
-    if (filter) query.set("status", filter);
-    apiRequest(`/tickets?${query}`, { token })
+    apiRequest(`/tickets?${ticketQuery(page, filter)}`, { token })
       .then((result) => {
-        if (active) setData(result);
+        if (!active) return;
+        // A status change can empty the last page; go to the page that is now last.
+        const lastPage = Math.max(result.pagination?.pages || 1, 1);
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+        setData(result);
       })
       .catch((requestError) => {
         if (active) setError(requestError.message);
@@ -28,7 +33,7 @@ function AdminTickets({ token }) {
     return () => {
       active = false;
     };
-  }, [token, filter, page, refreshKey]);
+  }, [token, filter, page]);
 
   function chooseFilter(next) {
     setData(null);
@@ -42,7 +47,8 @@ function AdminTickets({ token }) {
     setPage(next);
   }
 
-  // Replace one ticket in place, or drop it when it no longer matches the status filter.
+  // Replace one ticket in place, or drop it when it no longer matches the status filter. Only the
+  // counts are reloaded: reloading the page would move a ticket just answered to page 1, out of view.
   function applyUpdate(updated) {
     setData((current) => ({
       ...current,
@@ -50,7 +56,16 @@ function AdminTickets({ token }) {
         .map((ticket) => (ticket._id === updated._id ? updated : ticket))
         .filter((ticket) => !filter || ticket.status === filter),
     }));
-    setRefreshKey((key) => key + 1); // refresh the counts
+    apiRequest(`/tickets?${ticketQuery(page, filter)}`, { token })
+      .then((result) => {
+        // The change emptied the last page: go to the page that is now last.
+        if (page > Math.max(result.pagination?.pages || 1, 1)) {
+          goToPage(Math.max(result.pagination?.pages || 1, 1));
+          return;
+        }
+        setData((current) => current && { ...current, counts: result.counts, pagination: result.pagination });
+      })
+      .catch(() => {});
   }
 
   async function reply(ticketId, body) {

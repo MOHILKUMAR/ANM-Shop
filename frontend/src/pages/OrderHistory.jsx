@@ -137,6 +137,13 @@ async function downloadBill(order) {
   pdf.setTextColor(87, 52, 67);
   pdf.text("TOTAL PAID", columns.unit, y, { align: "right" });
   pdf.text(formatMoney(order.totalAmount), columns.total, y, { align: "right" });
+  // A cancelled or returned order was refunded; the bill says so.
+  if (order.refund?.status) {
+    y += 8;
+    pdf.setFontSize(11);
+    pdf.text(order.refund.status === "refunded" ? "REFUNDED" : "REFUND IN PROGRESS", columns.unit, y, { align: "right" });
+    pdf.text(`-${formatMoney(order.refund.amount)}`, columns.total, y, { align: "right" });
+  }
   y += 14;
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
@@ -296,9 +303,12 @@ You'll get a full refund of ${formatInr(order.totalAmount)} to your original pay
                   <button className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800" type="button" onClick={() => downloadBill(order)}>
                     Download bill (PDF)
                   </button>
-                  <button className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 disabled:opacity-60" type="button" disabled={sendingInvoiceId === order._id} onClick={() => resendInvoice(order._id)}>
-                    {sendingInvoiceId === order._id ? "Sending..." : "Resend e-bill"}
-                  </button>
+                  {/* The e-bill email presents the order as paid; cancelled and returned ones were refunded. */}
+                  {order.status !== "cancelled" && order.status !== "returned" && (
+                    <button className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 disabled:opacity-60" type="button" disabled={sendingInvoiceId === order._id} onClick={() => resendInvoice(order._id)}>
+                      {sendingInvoiceId === order._id ? "Sending..." : "Resend e-bill"}
+                    </button>
+                  )}
                 </div>
               </div>
             </article>

@@ -109,7 +109,8 @@ const listTickets = async (req, res) => {
     try {
         const [tickets, total, counts] = await Promise.all([
             Ticket.find(filter)
-                .sort({ lastActivityAt: -1 })
+                // _id breaks ties, so tickets with the same time never repeat or go missing between pages.
+                .sort({ lastActivityAt: -1, _id: -1 })
                 .skip((page - 1) * ADMIN_PAGE_SIZE)
                 .limit(ADMIN_PAGE_SIZE)
                 .populate('user', 'name email')

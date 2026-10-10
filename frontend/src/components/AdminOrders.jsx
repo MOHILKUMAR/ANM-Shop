@@ -6,15 +6,21 @@ import { formatInr } from "../money.js";
 // Statuses an admin sets by hand; cancelled and returned come from the actions below.
 const SHIPPING_STATUSES = ["pending", "shipped", "delivered"];
 const FILTERS = [...SHIPPING_STATUSES, "cancelled", "returned"];
+// Orders whose refund failed or never finished (the server's `refund=problem` filter).
+const REFUND_PROBLEMS = "refund-problems";
+// A refund still in progress after this long was interrupted; the server allows a retry then.
+const STUCK_REFUND_MS = 10 * 60 * 1000;
 const day = (date) => new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
 const shortCode = (id) => `#${id.slice(-8).toUpperCase()}`;
+const isStuck = (refund, loadedAt) => refund?.status === "pending" && loadedAt - new Date(refund.requestedAt).getTime() > STUCK_REFUND_MS;
 
-function RefundStatus({ order }) {
+function RefundStatus({ order, stuck }) {
   const refund = order.refund;
   if (!refund?.status) return null;
   const amount = formatInr(refund.amount);
   if (refund.status === "refunded") return <p className="mt-2 text-sm text-green-700">Refunded {amount}{refund.razorpayRefundId ? ` · ${refund.razorpayRefundId}` : ""}</p>;
   if (refund.status === "failed") return <p className="mt-2 text-sm font-medium text-red-700">Refund of {amount} failed: {refund.error || "Razorpay refused it"}</p>;
+  if (stuck) return <p className="mt-2 text-sm font-medium text-red-700">Refund of {amount} was interrupted and hasn’t finished. Retry it (a refund Razorpay already made is detected, not repeated).</p>;
   return <p className="mt-2 text-sm text-amber-800">Refund of {amount} in progress</p>;
 }
 
@@ -35,11 +41,18 @@ function AdminOrders({ token, onChanged }) {
   useEffect(() => {
     let active = true;
     const query = new URLSearchParams({ page: String(page) });
-    if (status) query.set("status", status);
+    if (status === REFUND_PROBLEMS) query.set("refund", "problem");
+    else if (status) query.set("status", status);
     apiRequest(`/orders?${query}`, { token })
       .then((result) => {
         if (!active) return;
-        setData(result);
+        // An action can empty the last page; go to the page that is now last.
+        const lastPage = Math.max(result.pagination?.pages || 1, 1);
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+        setData({ ...result, loadedAt: Date.now() });
         setError("");
       })
       .catch((requestError) => {
@@ -142,6 +155,16 @@ function AdminOrders({ token, onChanged }) {
             {label}{count === null || count === undefined ? "" : ` (${count})`}
           </button>
         ))}
+        {(data?.refundProblems > 0 || status === REFUND_PROBLEMS) && (
+          <button
+            className={`rounded-full px-4 py-1.5 text-sm font-semibold ${status === REFUND_PROBLEMS ? "bg-red-700 text-white" : "bg-red-50 text-red-700 hover:bg-red-100"}`}
+            type="button"
+            aria-pressed={status === REFUND_PROBLEMS}
+            onClick={() => changeFilter(REFUND_PROBLEMS)}
+          >
+            Refund problems ({data?.refundProblems ?? 0})
+          </button>
+        )}
       </div>
 
       {notice && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800" role="status">{notice}</p>}
@@ -152,6 +175,7 @@ function AdminOrders({ token, onChanged }) {
       {!loading && data?.orders.map((order) => {
         const closed = order.status === "cancelled" || order.status === "returned";
         const busy = busyId === order._id;
+        const stuck = isStuck(order.refund, data.loadedAt);
         return (
           <article className="rounded-xl border border-gray-200 bg-white p-5" key={order._id}>
             <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -164,7 +188,7 @@ function AdminOrders({ token, onChanged }) {
                     <span className="capitalize">{order.status}</span>{order.closedAt ? ` on ${day(order.closedAt)}` : ""}{order.closedBy ? ` by the ${order.closedBy}` : ""}{order.restocked ? " · items back in stock" : order.restocked === false ? " · not restocked" : ""}{order.refund?.reason ? ` · “${order.refund.reason}”` : ""}
                   </p>
                 )}
-                <RefundStatus order={order} />
+                <RefundStatus order={order} stuck={stuck} />
               </div>
               <p className="font-semibold text-gray-900">{formatInr(order.totalAmount)}</p>
               {closed ? (
@@ -184,10 +208,13 @@ function AdminOrders({ token, onChanged }) {
                 {(order.status === "shipped" || order.status === "delivered") && (
                   <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50" type="button" disabled={busy} onClick={() => setReturning({ id: order._id, restock: false, reason: "" })}>Mark returned</button>
                 )}
-                {order.refund?.status === "failed" && (
+                {(order.refund?.status === "failed" || stuck) && (
                   <button className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50" type="button" disabled={busy} onClick={() => act(order, "/refund")}>{busy ? "Retrying..." : "Retry refund"}</button>
                 )}
-                <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
+                {/* An unfinished refund is the record that money is owed; the server refuses too. */}
+                {order.refund?.status !== "pending" && order.refund?.status !== "failed" && (
+                  <button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" type="button" onClick={() => deleteOrder(order)}>Delete</button>
+                )}
               </div>
             </div>
 

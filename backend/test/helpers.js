@@ -48,6 +48,17 @@ const razorpay = {
         const signature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET).update(`${orderId}|${id}`).digest('hex');
         return { razorpay_order_id: orderId, razorpay_payment_id: id, razorpay_signature: signature };
     },
+    // A refund as Razorpay reports it; tests also use it for one "made in the Razorpay dashboard".
+    refundMadeAt(paymentId, amount, notes = {}) {
+        return { id: `rfnd_${crypto.randomBytes(7).toString('hex')}`, payment_id: paymentId, amount, notes, status: 'processed' };
+    },
+    // The signed payment.captured webhook Razorpay sends for a payment.
+    capturedWebhook(paymentId) {
+        const payment = this.payments.get(paymentId);
+        const body = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity: { ...payment, status: 'captured' } } } });
+        const signature = crypto.createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(body).digest('hex');
+        return { body, signature };
+    },
 };
 class FakeRazorpay {
     constructor() {
@@ -71,9 +82,16 @@ class FakeRazorpay {
             },
             refund: async (id, options) => {
                 if (razorpay.failRefunds) throw Object.assign(new Error('refund failed'), { statusCode: 400 });
-                const refund = { id: `rfnd_${crypto.randomBytes(7).toString('hex')}`, payment_id: id, amount: options?.amount ?? razorpay.payments.get(id)?.amount };
-                razorpay.refunds.push(refund);
-                return refund;
+                // Like Razorpay: each note may be at most 256 characters.
+                if (Object.values(options?.notes || {}).some((value) => String(value).length > 256)) {
+                    throw Object.assign(new Error('notes too long'), { statusCode: 400, error: { description: 'The notes value may not be greater than 256 characters.' } });
+                }
+                razorpay.refunds.push(razorpay.refundMadeAt(id, options?.amount ?? razorpay.payments.get(id)?.amount, options?.notes));
+                return razorpay.refunds.at(-1);
+            },
+            fetchMultipleRefund: async (id) => {
+                const items = razorpay.refunds.filter((refund) => refund.payment_id === id);
+                return { entity: 'collection', count: items.length, items };
             },
         };
     }
