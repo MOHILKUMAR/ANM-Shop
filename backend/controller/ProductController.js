@@ -74,33 +74,44 @@ const uploadProductImage = (file) => new Promise((resolve, reject) => {
 });
 
 const isTextIndexMissing = (error) => error?.code === 27 || /text index required/i.test(error?.message || '');
+// Search results are listed by id and paged from that list; this keeps a very broad search cheap.
+const MAX_SEARCH_MATCHES = 1000;
 
-// Products matching `search` (or all of `filter` without one), one page of them. Whole words use
-// the text index, ranked by relevance; when that finds nothing (e.g. a half-typed word like
-// "moist"), it falls back to a substring match on the name and description.
+// Products matching `search` (or all of `filter` without one), one page of them. Whole-word
+// matches come first, ranked by relevance through the text index; products that only contain the
+// search inside a longer word ("lip" in "lipstick", a half-typed "moist") follow, newest first.
 const findProducts = async (filter, search, page, limit) => {
-    const pageOf = (query) => query.skip((page - 1) * limit).limit(limit);
-    if (search) {
-        const textFilter = { ...filter, $text: { $search: search } };
-        try {
-            const total = await Product.countDocuments(textFilter);
-            if (total > 0) {
-                const items = await pageOf(Product.find(textFilter, { score: { $meta: 'textScore' } })
-                    .sort({ score: { $meta: 'textScore' }, createdAt: -1 }));
-                return { items, total };
-            }
-        } catch (error) {
-            // The index is built in the background after a deploy; search still works meanwhile.
-            if (!isTextIndexMissing(error)) throw error;
-        }
-        const safeSearch = new RegExp(escapeRegex(search), 'i');
-        filter = { ...filter, $or: [{ name: safeSearch }, { description: safeSearch }] };
+    if (!search) {
+        const [items, total] = await Promise.all([
+            Product.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+            Product.countDocuments(filter),
+        ]);
+        return { items, total };
     }
-    const [items, total] = await Promise.all([
-        pageOf(Product.find(filter).sort({ createdAt: -1 })),
-        Product.countDocuments(filter),
-    ]);
-    return { items, total };
+
+    let ranked = [];
+    try {
+        ranked = await Product.find({ ...filter, $text: { $search: search } }, { score: { $meta: 'textScore' } })
+            .sort({ score: { $meta: 'textScore' }, createdAt: -1 })
+            .limit(MAX_SEARCH_MATCHES)
+            .select('_id')
+            .lean();
+    } catch (error) {
+        // The index is built in the background after a deploy; search still works meanwhile.
+        if (!isTextIndexMissing(error)) throw error;
+    }
+    const pattern = new RegExp(escapeRegex(search), 'i');
+    const partial = await Product.find({ ...filter, _id: { $nin: ranked.map((match) => match._id) }, $or: [{ name: pattern }, { description: pattern }] })
+        .sort({ createdAt: -1 })
+        .limit(MAX_SEARCH_MATCHES)
+        .select('_id')
+        .lean();
+
+    const ids = [...ranked, ...partial].map((match) => String(match._id));
+    const pageIds = ids.slice((page - 1) * limit, page * limit);
+    const found = await Product.find({ _id: { $in: pageIds } });
+    const byId = new Map(found.map((product) => [String(product._id), product]));
+    return { items: pageIds.map((id) => byId.get(id)).filter(Boolean), total: ids.length };
 };
 
 // The photos to keep when editing: `keepImages` (a JSON list sent with the form) names which of
@@ -132,7 +143,8 @@ const getProducts = async (req, res) => {
     try {
         const categories = await categoryNames();
         if (category && !categories.includes(category)) {
-            return res.status(400).json({ message: 'Choose one of the shop’s categories' });
+            // e.g. an old link to a category that has since been renamed; the shop shows everything.
+            return res.status(400).json({ message: 'Choose one of the shop’s categories', unknownCategory: true });
         }
 
         const { items, total } = await findProducts({ category: category || { $in: categories } }, search, page, limit);

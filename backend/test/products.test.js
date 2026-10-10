@@ -28,6 +28,25 @@ test('search ranks name matches first and still finds half-typed words', async (
     assert.equal(none.body.pagination.total, 0);
 });
 
+test('search also finds the word inside longer words, after the whole-word matches', async () => {
+    await createProduct({ name: 'Velvet Matte Lipstick', description: 'Rich colour that lasts.' });
+    await createProduct({ name: 'Nourish Lip Balm', description: 'Softens dry lips.' });
+    await createProduct({ name: 'Hair oil', description: 'Adds shine.' });
+
+    const lip = await api().get('/api/products').query({ search: 'lip' });
+    assert.deepEqual(lip.body.items.map((product) => product.name), ['Nourish Lip Balm', 'Velvet Matte Lipstick']);
+    assert.equal(lip.body.pagination.total, 2);
+    const secondPage = await api().get('/api/products').query({ search: 'lip', limit: 1, page: 2 });
+    assert.deepEqual(secondPage.body.items.map((product) => product.name), ['Velvet Matte Lipstick'], 'pages run across both groups');
+    assert.equal(secondPage.body.pagination.pages, 2);
+});
+
+test('an old link to a renamed category is reported as such', async () => {
+    const res = await api().get('/api/products').query({ category: 'Hair Care (old)' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.unknownCategory, true, 'so the shop can show everything instead');
+});
+
 test('admins can search their product list', async () => {
     const admin = await createUser({ role: 'admin' });
     await createProduct({ name: 'Lip balm' });

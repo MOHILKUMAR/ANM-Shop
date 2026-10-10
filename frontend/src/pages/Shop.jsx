@@ -4,7 +4,7 @@ import { apiRequest } from "../api.js";
 import ProductCard from "../components/ProductCard.jsx";
 import { ProductGridSkeleton, Shimmer } from "../components/Skeletons.jsx";
 import { usePageMeta } from "../usePageMeta.js";
-import { useCategories } from "../useCategories.js";
+import { refreshCategories, useCategories } from "../useCategories.js";
 
 // What search results show for the shop, or for one category of it.
 const categoryDescription = (category, shopCategories) => {
@@ -21,6 +21,7 @@ function Shop() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const category = searchParams.get("category") || "";
   const page = Number(searchParams.get("page")) || 1;
@@ -38,6 +39,7 @@ function Shop() {
       if (search.trim()) query.set("search", search.trim());
       if (category) query.set("category", category);
 
+      let showingAll = false;
       apiRequest(`/products?${query.toString()}`)
         .then((data) => {
           if (!active) return;
@@ -47,10 +49,19 @@ function Shop() {
           setError("");
         })
         .catch((requestError) => {
-          if (active) setError(requestError.message);
+          if (!active) return;
+          if (requestError.data?.unknownCategory) {
+            // An old link (or a list loaded before an admin renamed or removed the category).
+            showingAll = true;
+            setNotice(`“${category}” isn’t one of our categories any more, so here’s the whole shop.`);
+            refreshCategories();
+            setSearchParams({}, { replace: true });
+            return;
+          }
+          setError(requestError.message);
         })
         .finally(() => {
-          if (active) setLoading(false);
+          if (active && !showingAll) setLoading(false);
         });
     }, search ? 250 : 0);
 
@@ -58,10 +69,11 @@ function Shop() {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [search, category, page]);
+  }, [search, category, page, setSearchParams]);
 
   function changeCategory(nextCategory) {
     setLoading(true);
+    setNotice("");
     setSearchParams(nextCategory ? { category: nextCategory } : {});
   }
 
@@ -107,6 +119,7 @@ function Shop() {
         </div>
       </div>
 
+      {notice && <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800" role="status">{notice}</p>}
       {loading
         ? <Shimmer className="mb-4 h-5 w-24" />
         : <p className="mb-4 text-sm text-gray-500">{pagination.total} product{pagination.total === 1 ? "" : "s"}</p>}
