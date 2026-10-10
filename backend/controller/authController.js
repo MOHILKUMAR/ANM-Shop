@@ -371,6 +371,28 @@ const removeAccount = async (user) => {
     await Promise.all(reviewedProducts.map((productId) => refreshProductRating(productId)));
 };
 
+// Why an account can't be deleted yet, or null: an order on its way (its customer could no longer
+// follow it), a refund still owed to them, or a payment still being confirmed. Only checkouts
+// touched in the last day count, so a record left stuck by an outage can't block it for good.
+const RECENT_CHECKOUT_MS = 24 * 60 * 60 * 1000;
+const deletionBlocker = async (userId) => {
+    const [activeOrders, refundOwed, checkout] = await Promise.all([
+        Order.countDocuments({ user: userId, status: { $in: ['pending', 'shipped'] } }),
+        Order.exists({ user: userId, 'refund.status': { $in: ['pending', 'failed'] } }),
+        // Paid, but the order hasn't been created yet (Razorpay is still confirming it), or a
+        // checkout that couldn't become an order is being refunded.
+        PaymentIntent.findOne({
+            user: userId,
+            updatedAt: { $gt: new Date(Date.now() - RECENT_CHECKOUT_MS) },
+            $or: [{ status: 'pending', paymentId: { $type: 'string' } }, { status: 'refund_pending' }],
+        }).select('status').lean(),
+    ]);
+    if (activeOrders) return { kind: 'orders', count: activeOrders };
+    if (refundOwed) return { kind: 'refund' };
+    if (checkout) return { kind: checkout.status === 'refund_pending' ? 'checkoutRefund' : 'payment' };
+    return null;
+};
+
 const deleteUser = async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) {
         return res.status(400).json({ message: 'Invalid user ID' });
@@ -384,6 +406,20 @@ const deleteUser = async (req, res) => {
         if (!user) return res.status(404).json({ message: 'Account not found' });
         if (user.role === 'admin') {
             return res.status(409).json({ message: "Admin accounts can't be deleted. Change their role to customer first." });
+        }
+        // The same checks as when customers delete their own account.
+        const blocker = await deletionBlocker(user._id);
+        if (blocker?.kind === 'orders') {
+            return res.status(409).json({ message: `This customer has ${blocker.count} order${blocker.count === 1 ? '' : 's'} on the way. Cancel ${blocker.count === 1 ? 'it' : 'them'} (Orders tab) or wait for delivery before deleting the account.` });
+        }
+        if (blocker?.kind === 'refund') {
+            return res.status(409).json({ message: 'A refund to this customer hasn’t gone through yet (Orders tab, Refund problems). Delete the account once it has been issued.' });
+        }
+        if (blocker?.kind === 'payment') {
+            return res.status(409).json({ message: 'A payment from this customer is still being confirmed. Try again in a few minutes.' });
+        }
+        if (blocker?.kind === 'checkoutRefund') {
+            return res.status(409).json({ message: 'A payment from this customer that couldn’t become an order is being refunded. Try again in a few minutes.' });
         }
         await removeAccount(user);
         return res.json({ message: 'Account deleted with their reviews. Their orders, payments, and tickets are kept as records.' });
@@ -428,7 +464,7 @@ const getUsers = async (req, res) => {
 };
 
 // DELETE /api/auth/me — a customer deletes their own account after confirming their password.
-// Refused while an order is still on its way (they couldn't follow it afterwards), and for
+// Refused while an order, refund or payment is still in progress (deletionBlocker), and for
 // admins, who must be made a customer by another admin first so the shop always keeps one.
 const deleteMyAccount = async (req, res) => {
     const password = typeof req.body.password === 'string' ? req.body.password : '';
@@ -443,22 +479,19 @@ const deleteMyAccount = async (req, res) => {
         if (user.role === 'admin') {
             return res.status(409).json({ message: 'Admin accounts can’t be deleted. Ask another admin to change your role to customer first.' });
         }
-        const [activeOrders, refundOwed, paymentInProgress] = await Promise.all([
-            Order.countDocuments({ user: user._id, status: { $in: ['pending', 'shipped'] } }),
-            Order.exists({ user: user._id, 'refund.status': { $in: ['pending', 'failed'] } }),
-            // Paid, but the order hasn't been created yet (Razorpay is still confirming it), or a
-            // checkout that couldn't become an order is being refunded.
-            PaymentIntent.exists({ user: user._id, $or: [{ status: 'pending', paymentId: { $type: 'string' } }, { status: 'refund_pending' }] }),
-        ]);
-        if (activeOrders) {
-            const them = activeOrders === 1 ? 'it' : 'them';
-            return res.status(409).json({ message: `You have ${activeOrders} order${activeOrders === 1 ? '' : 's'} on the way. Cancel ${them} on My orders or wait for delivery, then delete your account.` });
+        const blocker = await deletionBlocker(user._id);
+        if (blocker?.kind === 'orders') {
+            const them = blocker.count === 1 ? 'it' : 'them';
+            return res.status(409).json({ message: `You have ${blocker.count} order${blocker.count === 1 ? '' : 's'} on the way. Cancel ${them} on My orders or wait for delivery, then delete your account.` });
         }
-        if (refundOwed) {
+        if (blocker?.kind === 'refund') {
             return res.status(409).json({ message: 'A refund to you is still being processed. You can delete your account once it has been issued (see My orders).' });
         }
-        if (paymentInProgress) {
+        if (blocker?.kind === 'payment') {
             return res.status(409).json({ message: 'A payment of yours is still being confirmed. Try again in a few minutes, once its order appears on My orders.' });
+        }
+        if (blocker?.kind === 'checkoutRefund') {
+            return res.status(409).json({ message: 'A payment of yours that couldn’t become an order is being refunded. Try again in a few minutes.' });
         }
         await removeAccount(user);
         const text = `Hi ${user.name},\n\nYour ANM-Shop account (${user.email}) has been deleted, with your reviews and chat history. Records of past orders and payments are kept as the law requires.\n\nIf you didn't do this, contact us by replying to this email.`;
