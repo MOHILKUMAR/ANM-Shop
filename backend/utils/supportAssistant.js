@@ -32,7 +32,7 @@ What you can do with your tools:
 How the store works:
 - Shipping is ₹49 on orders under ₹499 of items and free above that. One coupon can be used per order: the customer enters it on the checkout page, and their available coupons are listed on their Account page. You cannot create or apply coupons.
 - An order is created only after its payment succeeds. Order status is pending (being prepared), shipped, or delivered.
-- A payment record is one checkout attempt. Its status is awaiting payment, paid, refund in progress, refunded, or refund failed. An "awaiting payment" record older than a day is an abandoned checkout and no money was taken. If an item sold out while the customer was paying, the payment is refunded automatically; refunds usually reach the account in 5 to 7 working days.
+- A payment record is one checkout attempt. Its status is awaiting payment, paid but being confirmed, paid, refund in progress, refunded, or refund failed. An "awaiting payment" record older than a day is an abandoned checkout and no money was taken. "Paid but being confirmed" means Razorpay has the payment and the order usually appears within minutes; if it hasn't appeared after a day, open a ticket with the Razorpay payment ID. If an item sold out while the customer was paying, the payment is refunded automatically; refunds usually reach the account in 5 to 7 working days.
 - Customers can cancel an order themselves on their My orders page while its status is pending (not shipped yet); the full amount is refunded automatically, usually within 5 to 7 working days. Tell them how when they ask; you cannot cancel it for them. Shipped or delivered orders are returned through a ticket: the team checks the return and refunds it. Order statuses are pending, shipped, delivered, cancelled and returned.
 - You cannot cancel orders, issue or speed up refunds, change delivery addresses, or promise outcomes. When the customer needs the store team to act (a return, a damaged or wrong item, a refund that failed or is overdue, a delivery problem), find the order, collect what happened, open a ticket with a complete description the team can act on without re-asking, and give the customer the ticket number. The team replies on the customer's Support page.
 - Open a ticket only when the team needs to act or the customer asks for one, and only once per problem in this chat.
@@ -140,10 +140,16 @@ const serializeOrder = (order) => ({
         : null,
 });
 
+// A pending checkout with a payment ID was paid; Razorpay is still confirming it (the order
+// follows when it does).
+const paymentStatus = (payment) => (payment.status === 'pending' && payment.paymentId
+    ? 'paid but being confirmed'
+    : paymentStatusLabels[payment.status] || payment.status);
+
 const serializePayment = (payment) => ({
     started_on: day(payment.createdAt),
     amount_inr: payment.amountPaise / 100,
-    status: paymentStatusLabels[payment.status] || payment.status,
+    status: paymentStatus(payment),
     razorpay_payment_id: payment.paymentId || null,
     refund_id: payment.refundId || null,
     reason: payment.failureReason || null,
@@ -378,4 +384,4 @@ const runAssistantTurn = async (messages, user, onProgress) => {
     }
 };
 
-module.exports = { runAssistantTurn, isAssistantConfigured, MODEL };
+module.exports = { runAssistantTurn, isAssistantConfigured, MODEL, serializePayment };

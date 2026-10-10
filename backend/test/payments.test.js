@@ -7,6 +7,7 @@ const Coupon = require('../model/Coupon');
 const CouponUsage = require('../model/CouponUsage');
 const Order = require('../model/Order');
 const PaymentIntent = require('../model/PaymentIntent');
+const { serializePayment } = require('../utils/supportAssistant');
 
 before(startDb);
 after(stopDb);
@@ -126,6 +127,25 @@ test('verify and the webhook together create exactly one order', async () => {
     const verified = await api().post('/api/payment/verify').set(customer.auth).send(paid);
     assert.equal(verified.status, 200, 'already verified');
     assert.equal(await Order.countDocuments(), 1);
+});
+
+test('a payment Razorpay is still confirming is noted on the checkout and described as paid', async () => {
+    const customer = await createUser();
+    const product = await createProduct();
+    const checkout = await api().post('/api/payment/order').set(customer.auth).send({ items: [{ productId: String(product._id), qty: 1 }], address });
+    const abandoned = await api().post('/api/payment/order').set(customer.auth).send({ items: [{ productId: String(product._id), qty: 1 }], address });
+
+    razorpay.failCaptures = true;
+    const paid = razorpay.pay(checkout.body.razorpayOrderId, { status: 'authorized' });
+    const verified = await api().post('/api/payment/verify').set(customer.auth).send(paid);
+    assert.equal(verified.status, 202);
+    assert.equal(await Order.countDocuments(), 0, 'the webhook creates the order later');
+
+    const intent = await PaymentIntent.findOne({ razorpayOrderId: checkout.body.razorpayOrderId });
+    assert.equal(intent.status, 'pending');
+    assert.equal(intent.paymentId, paid.razorpay_payment_id);
+    assert.equal(serializePayment(intent).status, 'paid but being confirmed');
+    assert.equal(serializePayment(await PaymentIntent.findOne({ razorpayOrderId: abandoned.body.razorpayOrderId })).status, 'awaiting payment');
 });
 
 test('a forged payment signature is rejected', async () => {

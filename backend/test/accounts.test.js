@@ -128,6 +128,41 @@ test('an account can\'t be deleted while money is still on its way to or from it
     assert.match(confirming.body.message, /still being confirmed/);
 });
 
+test('a checkout refund stuck for over a day no longer blocks deleting the account', async () => {
+    const customer = await createUser({ password: 'pass-word-77' });
+    const product = await createProduct();
+    const checkout = await api().post('/api/payment/order').set(customer.auth).send({ items: [line(product)], address });
+    const stuck = { razorpayOrderId: checkout.body.razorpayOrderId };
+    await PaymentIntent.updateOne(stuck, { $set: { status: 'refund_pending', paymentId: 'pay_stuck' } });
+    const recent = await api().delete('/api/auth/me').set(customer.auth).send({ password: 'pass-word-77' });
+    assert.equal(recent.status, 409, 'a refund in progress blocks it');
+
+    // Two days later it is still stuck (e.g. the server restarted mid-refund).
+    await PaymentIntent.updateOne(stuck, { $set: { updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) } }, { timestamps: false });
+    const later = await api().delete('/api/auth/me').set(customer.auth).send({ password: 'pass-word-77' });
+    assert.equal(later.status, 200);
+});
+
+test('admins deleting a customer get the same checks', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const customer = await createUser();
+    const order = await placeOrder(customer, [line(await createProduct())]);
+
+    const onTheWay = await api().delete(`/api/auth/users/${customer.user._id}`).set(admin.auth);
+    assert.equal(onTheWay.status, 409);
+    assert.match(onTheWay.body.message, /1 order on the way/);
+
+    razorpay.failRefunds = true;
+    await api().post(`/api/orders/${order._id}/cancel`).set(admin.auth);
+    const owed = await api().delete(`/api/auth/users/${customer.user._id}`).set(admin.auth);
+    assert.equal(owed.status, 409);
+    assert.match(owed.body.message, /refund/);
+
+    await Order.updateOne({ _id: order._id }, { $set: { 'refund.status': 'refunded' } });
+    assert.equal((await api().delete(`/api/auth/users/${customer.user._id}`).set(admin.auth)).status, 200);
+    assert.equal(await User.exists({ _id: customer.user._id }), null);
+});
+
 test('a payment that completes after the account was deleted is refunded, not turned into an order', async () => {
     const customer = await createUser({ password: 'pass-word-66' });
     const product = await createProduct({ stock: 3 });

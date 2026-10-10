@@ -6,12 +6,18 @@ const Order = require('../model/Order');
 const Coupon = require('../model/Coupon');
 const CouponUsage = require('../model/CouponUsage');
 const Review = require('../model/Review');
+const User = require('../model/User');
 
 before(startDb);
 after(stopDb);
 beforeEach(resetDb);
 
 const line = (product, qty = 1) => ({ productId: String(product._id), qty });
+// Waits up to 2 s for something sent in the background (e.g. the admins' refund alert).
+const eventually = async (check) => {
+    for (let tries = 0; tries < 40 && !check(); tries += 1) await new Promise((resolve) => { setTimeout(resolve, 50); });
+    return check();
+};
 
 test('a customer can cancel a pending order: full refund, stock back, coupon use back', async () => {
     const customer = await createUser();
@@ -105,7 +111,7 @@ test('a failed refund alerts the admins, is listed and kept, and can be retried'
     assert.equal(cancelled.status, 200);
     assert.match(cancelled.body.message, /We’ve been alerted/);
     assert.equal((await Order.findById(order._id)).refund.status, 'failed');
-    assert.ok(sentEmails.some((email) => email.to === admin.user.email && /Refund failed/.test(email.subject)), 'admins are emailed');
+    assert.ok(await eventually(() => sentEmails.some((email) => email.to === admin.user.email && /Refund failed/.test(email.subject))), 'admins are emailed');
 
     const problems = await api().get('/api/orders').set(admin.auth).query({ refund: 'problem' });
     assert.equal(problems.body.refundProblems, 1);
@@ -120,6 +126,28 @@ test('a failed refund alerts the admins, is listed and kept, and can be retried'
     assert.equal((await api().post(`/api/orders/${order._id}/refund`).set(admin.auth)).status, 409, 'nothing left to retry');
     assert.equal((await api().get('/api/orders').set(admin.auth)).body.refundProblems, 0);
     assert.equal((await api().delete(`/api/orders/${order._id}`).set(admin.auth)).status, 200);
+});
+
+test('a failing admin alert doesn\'t fail the customer\'s cancellation', async () => {
+    const customer = await createUser();
+    await createUser({ role: 'admin' });
+    const order = await placeOrder(customer, [line(await createProduct())]);
+    sentEmails.length = 0;
+    razorpay.failRefunds = true;
+    const realFind = User.find;
+    User.find = function findFailingForAdmins(filter, ...rest) {
+        if (filter?.role === 'admin') throw new Error('database unavailable');
+        return realFind.call(this, filter, ...rest);
+    };
+    try {
+        const cancelled = await api().post(`/api/orders/${order._id}/cancel`).set(customer.auth);
+        assert.equal(cancelled.status, 200);
+        assert.equal((await Order.findById(order._id)).status, 'cancelled');
+        assert.ok(sentEmails.some((email) => email.to === customer.user.email && /cancelled/.test(email.subject)), 'the customer is still told');
+    } finally {
+        await new Promise((resolve) => { setTimeout(resolve, 100); }); // let the background alert finish failing
+        User.find = realFind;
+    }
 });
 
 test('retrying records a refund Razorpay already made instead of refunding again', async () => {

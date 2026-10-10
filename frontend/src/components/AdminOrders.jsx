@@ -43,12 +43,15 @@ function AdminOrders({ token, onChanged }) {
     const query = new URLSearchParams({ page: String(page) });
     if (status === REFUND_PROBLEMS) query.set("refund", "problem");
     else if (status) query.set("status", status);
+    let movingPage = false;
     apiRequest(`/orders?${query}`, { token })
       .then((result) => {
         if (!active) return;
-        // An action can empty the last page; go to the page that is now last.
+        // An action can empty the last page; go to the page that is now last (still loading, so
+        // the old rows and their buttons aren't shown meanwhile).
         const lastPage = Math.max(result.pagination?.pages || 1, 1);
         if (page > lastPage) {
+          movingPage = true;
           setPage(lastPage);
           return;
         }
@@ -59,7 +62,7 @@ function AdminOrders({ token, onChanged }) {
         if (active) setError(requestError.message);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && !movingPage) setLoading(false);
       });
     return () => {
       active = false;

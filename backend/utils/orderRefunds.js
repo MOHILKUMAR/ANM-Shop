@@ -68,7 +68,8 @@ const issueRefund = async (order, { alert = false } = {}) => {
         const message = String(error?.error?.description || error.message || 'Razorpay did not accept the refund').slice(0, 300);
         console.error('ORDER REFUND FAILED - retry from the admin dashboard or refund in Razorpay. Order:', String(order._id), message);
         const failed = await Order.findByIdAndUpdate(order._id, { $set: { 'refund.status': 'failed', 'refund.error': message } }, { returnDocument: 'after' });
-        if (alert) await alertAdmins(failed || order, message);
+        // In the background: the customer's cancellation mustn't wait for, or fail with, this email.
+        if (alert) alertAdmins(failed || order, message).catch((error) => console.error('Refund alert to admins failed:', error.message));
         return failed || order;
     }
     // The money is on its way. If recording that fails, the refund stays "pending"; a retry then

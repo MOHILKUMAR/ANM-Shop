@@ -34,11 +34,14 @@ const razorpay = {
     payments: new Map(),
     refunds: [],
     failRefunds: false,
+    // Capturing an authorized payment fails, so it stays authorized (Razorpay still confirming it).
+    failCaptures: false,
     reset() {
         this.orders.clear();
         this.payments.clear();
         this.refunds.length = 0;
         this.failRefunds = false;
+        this.failCaptures = false;
     },
     // A captured payment for a Razorpay order, as the checkout window would produce.
     pay(orderId, { method = 'upi', status = 'captured' } = {}) {
@@ -76,6 +79,7 @@ class FakeRazorpay {
                 return { ...payment };
             },
             capture: async (id) => {
+                if (razorpay.failCaptures) throw Object.assign(new Error('capture failed'), { statusCode: 400 });
                 const payment = razorpay.payments.get(id);
                 payment.status = 'captured';
                 return { ...payment };
