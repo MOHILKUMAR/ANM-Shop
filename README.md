@@ -91,8 +91,9 @@ The first `npm test` downloads a MongoDB binary for the in-memory database (cach
 ## Operating notes
 
 - A refund that Razorpay refuses emails the admins and appears under **Refund problems** on the
-  Orders tab with a **Retry refund** button; one interrupted by a restart appears there after 10
-  minutes (without an email). Retrying first checks Razorpay, so a refund that already went
+  Orders tab with a **Retry refund** button (if the database also fails to record the refusal,
+  it shows as "in progress" and appears there after 10 minutes); one interrupted by a restart
+  appears there after 10 minutes (without an email). Retrying first checks Razorpay, so a refund that already went
   through, or one made by hand in the Razorpay dashboard, is recorded instead of repeated.
   Checkout refunds that fail are logged as `AUTOMATIC REFUND FAILED` and need refunding in
   Razorpay.
@@ -141,7 +142,8 @@ the shop's current size. Each says when it matters and what to do meanwhile.
   never confirmed (for example a payment Razorpay later voided) keeps that label. Before
   deleting such a record, check the payment in the Razorpay dashboard: if Razorpay captures it
   after the record is gone, the shop ignores it, so no order is created and it has to be
-  refunded by hand.
+  refunded by hand. If the dashboard already shows it as captured but the shop has no order for
+  it (Razorpay couldn't reach the shop), refund it by hand there too.
 
 **Shop pages**
 - **Search reads every product.** Partial-word matching ("lip" finding "Lipstick") checks every
