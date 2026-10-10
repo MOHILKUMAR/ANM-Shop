@@ -1,0 +1,63 @@
+# Runs the API tests, and the shop's lint, tests and build, on every pull request and on each
+# push to main. Neither job reads secrets: the API tests use an in-memory MongoDB and a fake
+# Razorpay, and the shop's tests fake the API.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its run still going. Runs on main always finish, so
+# every merge gets its own result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      # The first test run downloads a MongoDB binary for the in-memory database; keep it
+      # between runs. The key follows the library that picks the MongoDB version, so an
+      # upgrade starts a fresh cache instead of piling binaries up.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('backend/node_modules/mongodb-memory-server-core/package.json') }}
+      - run: MONGOMS_DOWNLOAD_DIR="$HOME/.cache/mongodb-binaries" npm test
+
+  shop:
+    name: Shop lint, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # Also checks the Content-Security-Policy hash of index.html's inline script.
+      - run: npm run build

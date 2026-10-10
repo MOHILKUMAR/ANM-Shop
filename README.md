@@ -72,6 +72,9 @@ the Users tab.
 
 The first `npm test` downloads a MongoDB binary for the in-memory database (cached afterwards).
 
+GitHub Actions (`.github/workflows/ci.yml`) runs the API tests, and the shop's lint, tests and
+build, on every pull request and on each push to `main`. It uses no secrets.
+
 ## Deploying
 
 - **API (Render):** `render.yaml` builds `backend/` with `npm ci --omit=dev` and checks `GET /`.
