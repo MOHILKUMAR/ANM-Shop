@@ -16,5 +16,6 @@ export default defineConfig({
   server: { proxy: apiProxy },
   preview: { proxy: apiProxy },
   // `npm test`: component tests in a simulated browser (src/**/*.test.jsx)
-  test: { environment: 'jsdom' },
+  // (rendering a 50-ticket page can take a few seconds on a cold start, hence the time limit)
+  test: { environment: 'jsdom', testTimeout: 20000 },
 })

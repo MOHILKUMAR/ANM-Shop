@@ -13,8 +13,11 @@ function AdminTickets({ token }) {
   const [data, setData] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [error, setError] = useState("");
+  // Each reload gets a new number (from a counter, so a late reply can't reuse an old one).
   const [reloadKey, setReloadKey] = useState(0);
-  // A ticket just answered, which the list follows if the reply moved it to another page.
+  const reloads = useRef(0);
+  // The ticket whose thread is open when it changes: a reply (or status change) puts it at the
+  // top of the list, so the reload that follows the change goes to page 1 with it.
   const following = useRef(null);
 
   useEffect(() => {
@@ -22,8 +25,11 @@ function AdminTickets({ token }) {
     apiRequest(`/tickets?${ticketQuery(page, filter)}`, { token })
       .then((result) => {
         if (!active) return;
-        const followed = following.current;
-        following.current = null;
+        // Only the reload for that change, on the page where it was made, follows it.
+        const note = following.current;
+        const followed = note?.reloadKey === reloadKey && note.filter === filter && note.page === page ? note : null;
+        if (followed) following.current = null;
+        setError("");
         const lastPage = Math.max(result.pagination?.pages || 1, 1);
         // A change can empty the last page: show the page that is now last.
         if (page > lastPage) {
@@ -31,8 +37,8 @@ function AdminTickets({ token }) {
           setPage(lastPage);
           return;
         }
-        // A reply puts its ticket at the top of the list (page 1): go there, thread still open.
-        if (followed?.filter === filter && page > 1 && !result.tickets.some((ticket) => ticket._id === followed.id)) {
+        // The ticket being worked on moved to the top of the list (page 1): go there, thread still open.
+        if (followed && page > 1 && !result.tickets.some((ticket) => ticket._id === followed.id)) {
           setData(null);
           setPage(1);
           return;
@@ -53,6 +59,7 @@ function AdminTickets({ token }) {
     setError("");
     setFilter(next);
     setPage(1);
+    setReloadKey((reloads.current += 1)); // reloads even when this filter and page are already shown
   }
 
   function goToPage(next) {
@@ -71,8 +78,13 @@ function AdminTickets({ token }) {
         .map((ticket) => (ticket._id === updated._id ? updated : ticket))
         .filter((ticket) => ticket._id !== updated._id || stillListed),
     });
-    following.current = stillListed ? { id: updated._id, filter } : null;
-    setReloadKey((key) => key + 1);
+    const next = (reloads.current += 1);
+    const note = following.current;
+    if (stillListed && updated._id === openId) following.current = { id: updated._id, filter, page, reloadKey: next };
+    // This reload replaces one still following an earlier change to another ticket.
+    else if (note && note.id !== updated._id) following.current = { ...note, reloadKey: next };
+    else following.current = null;
+    setReloadKey(next);
   }
 
   async function reply(ticketId, body) {

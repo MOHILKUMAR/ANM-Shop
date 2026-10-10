@@ -14,7 +14,9 @@ const STATUSES = ["open", "in_progress", "resolved", "closed"];
 const ORDER = { _id: "order1", code: "#ORDER001", totalAmount: 999, status: "delivered", paymentId: "pay_test1", createdAt: "2026-10-01T10:00:00.000Z" };
 let tickets;
 let clock;
+// When set, replies or list requests wait for these promises (to land them at awkward moments).
 let holdReplies;
+let holdLists;
 
 function makeTickets(count, status = "open") {
   clock = Date.UTC(2026, 9, 10, 12);
@@ -39,6 +41,7 @@ const asJson = (ticket) => ({ ...ticket, lastActivityAt: new Date(ticket.lastAct
 async function fakeApi(path, { method = "GET", body } = {}) {
   const url = new URL(path, "http://test");
   if (method === "GET" && url.pathname === "/tickets") {
+    if (holdLists) await holdLists;
     const status = url.searchParams.get("status");
     const page = Number(url.searchParams.get("page")) || 1;
     const matching = tickets.filter((ticket) => !status || ticket.status === status).sort((a, b) => b.lastActivityAt - a.lastActivityAt);
@@ -65,8 +68,16 @@ async function fakeApi(path, { method = "GET", body } = {}) {
 
 beforeEach(() => {
   holdReplies = null;
+  holdLists = null;
   apiRequest.mockImplementation(fakeApi);
 });
+
+// A promise and the function that settles it.
+const gate = () => {
+  let open;
+  const promise = new Promise((resolve) => { open = resolve; });
+  return [promise, open];
+};
 afterEach(cleanup);
 
 const statusSelects = () => screen.queryAllByRole("combobox", { name: "Ticket status" });
@@ -129,17 +140,65 @@ test("resolving the last tickets on the last page goes back to the page before",
   expect(screen.queryByText(/No tickets here/)).toBeNull();
 });
 
-test("switching filter while a reply is being saved keeps the page working", async () => {
+test("a reply saved while another filter is still loading keeps the page working", async () => {
   makeTickets(5);
-  let release;
-  holdReplies = new Promise((resolve) => { release = resolve; });
   render(<AdminTickets token="test" />);
   await waitFor(() => expect(statusSelects()).toHaveLength(5));
 
+  const [replyHeld, saveReply] = gate();
+  const [listsHeld, sendLists] = gate();
+  holdReplies = replyHeld;
   await reply("Question 2", "Checking now.");
+  holdLists = listsHeld;
   fireEvent.click(chip("All"));
-  release();
+  expect(screen.getByText("Loading tickets")).toBeTruthy();
+  saveReply(); // lands while the All list is still empty
+  await new Promise((resolve) => { setTimeout(resolve, 50); });
+  sendLists();
   await waitFor(() => expect(chip("In progress").textContent).toBe("In progress (1)"));
   await waitFor(() => expect(statusSelects()).toHaveLength(5));
   expect(screen.getByRole("button", { name: /^All \(/, pressed: true })).toBeTruthy();
+});
+
+test("a reply that finishes after the admin moved to another page leaves them there", async () => {
+  makeTickets(120, "in_progress");
+  render(<AdminTickets token="test" />);
+  await waitFor(() => expect(screen.getByText(/No tickets here/)).toBeTruthy());
+  fireEvent.click(chip("All"));
+  await waitFor(() => expect(pager()).toBe("Page 1 of 3"));
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(pager()).toBe("Page 2 of 3"));
+
+  const [replyHeld, saveReply] = gate();
+  holdReplies = replyHeld;
+  await reply("Question 60", "On it.");
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(pager()).toBe("Page 3 of 3"));
+  const callsBefore = apiRequest.mock.calls.length;
+  saveReply();
+  await waitFor(() => expect(apiRequest.mock.calls.length).toBeGreaterThan(callsBefore)); // the reload after the reply
+  await new Promise((resolve) => { setTimeout(resolve, 100); });
+  expect(pager()).toBe("Page 3 of 3");
+});
+
+test("a status change on a closed thread keeps the admin on their page", async () => {
+  makeTickets(55, "in_progress");
+  render(<AdminTickets token="test" />);
+  await waitFor(() => expect(screen.getByText(/No tickets here/)).toBeTruthy());
+  fireEvent.click(chip("All"));
+  await waitFor(() => expect(pager()).toBe("Page 1 of 2"));
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(pager()).toBe("Page 2 of 2"));
+
+  fireEvent.change(within(ticketCard("Question 52")).getByRole("combobox", { name: "Ticket status" }), { target: { value: "resolved" } });
+  await waitFor(() => expect(chip("Resolved").textContent).toBe("Resolved (1)"));
+  expect(pager()).toBe("Page 2 of 2");
+});
+
+test("clicking the filter that is already shown reloads it instead of leaving it empty", async () => {
+  makeTickets(5);
+  render(<AdminTickets token="test" />);
+  await waitFor(() => expect(statusSelects()).toHaveLength(5));
+  fireEvent.click(chip("Open"));
+  await waitFor(() => expect(statusSelects()).toHaveLength(5));
 });
