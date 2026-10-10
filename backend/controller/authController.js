@@ -237,7 +237,7 @@ const changePassword = async (req, res) => {
         user.passwordResetExpiresAt = undefined;
         await user.save();
 
-        const text = `The password for your ANM-Shop account (${user.email}) was changed on ${user.passwordChangedAt.toLocaleString('en-IN')}. You have been signed out on other devices. If you did not make this change, contact ANM-Shop support right away.`;
+        const text = `The password for your ANM-Shop account (${user.email}) was changed on ${user.passwordChangedAt.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' })} (India time). You have been signed out on other devices. If you did not make this change, contact ANM-Shop support right away.`;
         const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#33252e"><h1 style="color:#754656">Your password was changed</h1><p>${escapeHtml(text)}</p></div>`;
         // A failed notice shouldn't undo the change; it is only logged.
         sendEmail(user.email, 'Your ANM-Shop password was changed', text, html)
