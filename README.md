@@ -90,10 +90,63 @@ The first `npm test` downloads a MongoDB binary for the in-memory database (cach
 
 ## Operating notes
 
-- A refund that Razorpay refuses (or that a restart interrupts) emails the admins and appears
-  under **Refund problems** on the Orders tab with a **Retry refund** button. Retrying first checks
-  Razorpay, so a refund that already went through, or one made by hand in the Razorpay
-  dashboard, is recorded instead of repeated. Checkout refunds that fail are logged as
-  `AUTOMATIC REFUND FAILED` and need refunding in Razorpay.
+- A refund that Razorpay refuses emails the admins and appears under **Refund problems** on the
+  Orders tab with a **Retry refund** button; one interrupted by a restart appears there after 10
+  minutes (without an email). Retrying first checks Razorpay, so a refund that already went
+  through, or one made by hand in the Razorpay dashboard, is recorded instead of repeated.
+  Checkout refunds that fail are logged as `AUTOMATIC REFUND FAILED` and need refunding in
+  Razorpay.
 - Rate-limit counts are kept in memory per API instance; use a shared store before running more
   than one instance.
+
+## Known limitations
+
+Small issues found in code reviews and left on purpose, because they are rare or harmless at
+the shop's current size. Each says when it matters and what to do meanwhile.
+
+**Refunds and payments**
+- **A refund that went through but couldn't be saved alerts nobody.** If Razorpay accepts a
+  refund and the database write right after it fails, no email goes out, although the customer
+  is told "We've been alerted". After 10 minutes the order appears under **Refund problems**;
+  **Retry refund** then finds the refund at Razorpay and records it (no second refund).
+- **Account deletion and a payment can cross in the same instant.** If a customer deletes their
+  account at the exact moment Razorpay confirms a payment, an order can still be created for
+  the deleted account (it shows as "Deleted account"). Cancel it from the Orders tab to refund
+  it. A payment confirmed even slightly later is refunded automatically.
+- **The "interrupted refund" check uses the admin's computer clock.** If that clock is several
+  minutes off, an interrupted refund can show "in progress" without a Retry button (clock
+  behind) or offer Retry a little early, which answers "no failed refund to retry" (clock
+  ahead). Keep the computer's clock set automatically, or wait a few minutes and reload.
+
+**Accounts and coupons**
+- **Deleting an account resets per-customer coupon limits.** Limits like "once per customer"
+  are counted per account, so someone who deletes their account and signs up again with the
+  same email can use the coupon again. A coupon's total usage limit still applies; give
+  valuable coupons a total limit or restrict them to named customers.
+
+**Admin dashboard**
+- **Keyboard focus resets after a reply moves a ticket.** When a reply moves the ticket to page
+  1 of the Tickets tab, the list follows it with its thread open, but keyboard focus goes back
+  to the top of the page.
+- **Removed product photos stay in Cloudinary.** Photos removed from a product, and uploads from
+  a product save that failed, are never deleted from Cloudinary. This only uses storage; tidy
+  the `anm-shop/products` folder in Cloudinary now and then if space runs low.
+
+**Shop pages**
+- **Search reads every product.** Partial-word matching ("lip" finding "Lipstick") checks every
+  product's name and description on each search. That is instant for a few hundred products;
+  with tens of thousands, search-as-you-type would slow down and needs a search service (for
+  example MongoDB Atlas Search).
+- **Search pages can repeat or skip a product.** Products created in the same millisecond (for
+  example in one bulk import) have no fixed order, so paging through search results can show
+  one twice and miss another.
+- **A stale category error on the home page.** If reloading the category list fails after it
+  has loaded once (a network blip), the home page can show "Categories could not be loaded"
+  above the working category tiles until the page is reloaded.
+- **Long PDF bills can lose their last line.** On a bill with about 15 or more items plus a
+  discount and a refund, the closing "Thank you" line can fall off the bottom of the page, and
+  the refund line can land in the printer's margin. The items and totals are unaffected.
+
+Larger features that aren't built yet (partial refunds, emails when an order ships, the paid
+Gemini tier, a shared rate-limit store, httpOnly cookie sessions) are covered in the project
+documentation PDF, in the "Known limitations and next steps" chapter.
