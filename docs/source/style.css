@@ -62,6 +62,7 @@ td code { white-space: nowrap; }
 .note b { color: #7a5520; }
 figure { margin: 2mm 0 5mm; break-inside: avoid; }
 figure svg { width: 100%; height: auto; max-height: 205mm; display: block; }
+table.history td:nth-child(-n+2) { white-space: nowrap; }
 table.api { table-layout: fixed; }
 table.api th:nth-child(1) { width: 17mm; }
 table.api th:nth-child(2) { width: 62mm; }

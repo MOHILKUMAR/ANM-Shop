@@ -10,8 +10,10 @@ D.hld = fs.readFileSync(path.join(__dirname, 'hld.svg'), 'utf8');
 D.deploy = flow({
   width: 1000, height: 350,
   nodes: [
-    { id: 'dev', kind: 'start', x: 105, y: 60, w: 190, t: 'Developer\nmerges a pull request' },
-    { id: 'gh', x: 355, y: 60, w: 240, t: 'GitHub repository\nMOHILKUMAR/ANM-Shop · main' },
+    { id: 'pr', kind: 'start', x: 105, y: 60, w: 200, t: 'Developer\nopens a pull request' },
+    { id: 'ci', kind: 'ext', x: 105, y: 195, w: 200, t: 'GitHub Actions\nAPI tests · shop checks' },
+    { id: 'mg', x: 105, y: 305, w: 200, t: 'Merge into main\n(branch protection)' },
+    { id: 'gh', x: 330, y: 195, w: 230, t: 'GitHub repository\nMOHILKUMAR/ANM-Shop · main' },
     { id: 'vb', kind: 'ext', x: 640, y: 60, w: 250, t: 'Vercel build (frontend/)\nvite build → static files' },
     { id: 'cdn', kind: 'end', x: 885, y: 60, w: 210, t: 'Vercel CDN\nanm-shop.vercel.app' },
     { id: 'rb', kind: 'ext', x: 640, y: 195, w: 250, t: 'Render build (backend/)\nnpm ci --omit=dev · Node 22' },
@@ -19,10 +21,12 @@ D.deploy = flow({
     { id: 'hc', kind: 'end', x: 885, y: 305, w: 210, t: 'Health check GET /\nanm-shop-api.onrender.com' },
   ],
   edges: [
-    { from: 'dev', to: 'gh', fp: 'r', tp: 'l' },
+    { from: 'pr', to: 'ci' },
+    { from: 'ci', to: 'mg', label: 'both checks pass' },
+    { from: 'mg', to: 'gh', fp: 'r', tp: 'b' },
     { from: 'gh', to: 'vb', fp: 'r', tp: 'l' },
     { from: 'vb', to: 'cdn', fp: 'r', tp: 'l' },
-    { from: 'gh', to: 'rb', fp: 'b', tp: 'l', label: 'render.yaml blueprint', l: [400, 160] },
+    { from: 'gh', to: 'rb', fp: 'r', tp: 'l' },
     { from: 'rb', to: 'st', fp: 'r', tp: 'l' },
     { from: 'st', to: 'hc', fp: 'b', tp: 't' },
   ],
