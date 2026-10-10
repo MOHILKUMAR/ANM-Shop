@@ -43,7 +43,7 @@ Gmail (email), Vercel Web Analytics and Speed Insights (only after the visitor c
 You need Node 22 and a MongoDB connection string (a free Atlas cluster works).
 
 ```bash
-npm run install:all                 # installs backend and frontend
+npm run install:all                 # installs the root tools, backend and frontend
 cp backend/.env.example backend/.env
 # Fill in at least MONGO_URL and JWT_SECRET; add Razorpay test keys, Cloudinary, email and
 # Gemini keys for those features (each is explained in the file).
@@ -51,7 +51,8 @@ npm run dev                         # API on :5000, shop on :5173 (Vite proxies 
 ```
 
 Optional demo data: `cd backend && npm run seed` adds 44 products (`node seed.js -d` removes
-them). The 7 default categories are created automatically on first start.
+them). Running it again only adds demo products that are missing; it never overwrites changes
+made in the dashboard. The 7 default categories are created automatically on first start.
 
 **First admin:** sign up in the shop, put that email in `ADMIN_EMAIL` in `backend/.env`, then run
 `cd backend && npm run promote-admin`. After that, admins give other accounts the admin role from
@@ -88,7 +89,10 @@ The first `npm test` downloads a MongoDB binary for the in-memory database (cach
 
 ## Operating notes
 
-- A refund that Razorpay refuses is shown on the order with a **Retry refund** button; checkout
-  refunds that fail are logged as `AUTOMATIC REFUND FAILED` and need refunding in Razorpay.
+- A refund that Razorpay refuses (or that a restart interrupts) emails the admins and appears
+  under **Refund problems** on the Orders tab with a **Retry refund** button. Retrying first checks
+  Razorpay, so a refund that already went through, or one made by hand in the Razorpay
+  dashboard, is recorded instead of repeated. Checkout refunds that fail are logged as
+  `AUTOMATIC REFUND FAILED` and need refunding in Razorpay.
 - Rate-limit counts are kept in memory per API instance; use a shared store before running more
   than one instance.
